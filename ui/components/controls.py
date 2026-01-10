@@ -64,12 +64,36 @@ def render_control_panel(manager: SimulatorManager) -> SimulatorConfig:
     )
     manager.alert_threshold = alert_threshold
     
+    # Automatic Maintenance Settings
+    st.sidebar.subheader("⚙️ Auto-Maintenance Cycle")
+    
+    auto_maintenance_enabled = st.sidebar.checkbox(
+        "Enable Auto-Maintenance",
+        value=manager.config.auto_maintenance_enabled,
+        help="Automatically reset motor health after each cycle period"
+    )
+    
+    maintenance_cycle_period = st.sidebar.slider(
+        "Maintenance Cycle Period",
+        min_value=50,
+        max_value=1000,
+        value=manager.config.maintenance_cycle_period,
+        step=10,
+        help="Number of timesteps between automatic maintenance (when enabled)",
+        disabled=not auto_maintenance_enabled
+    )
+    
+    if auto_maintenance_enabled:
+        st.sidebar.info(f"🔧 Motors will auto-reset every {maintenance_cycle_period} steps")
+    
     # Create new config
     config = SimulatorConfig(
         num_motors=num_motors,
         degradation_speed=degradation_speed,
         noise_level=noise_level,
-        load_factor=load_factor
+        load_factor=load_factor,
+        auto_maintenance_enabled=auto_maintenance_enabled,
+        maintenance_cycle_period=maintenance_cycle_period
     )
     
     return config

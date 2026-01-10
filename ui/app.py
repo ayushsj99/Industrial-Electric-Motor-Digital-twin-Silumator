@@ -96,7 +96,9 @@ def main():
             config.num_motors != manager.config.num_motors or
             abs(config.degradation_speed - manager.config.degradation_speed) > 0.01 or
             abs(config.noise_level - manager.config.noise_level) > 0.01 or
-            abs(config.load_factor - manager.config.load_factor) > 0.01
+            abs(config.load_factor - manager.config.load_factor) > 0.01 or
+            config.auto_maintenance_enabled != manager.config.auto_maintenance_enabled or
+            config.maintenance_cycle_period != manager.config.maintenance_cycle_period
         )
         
         if config_changed:

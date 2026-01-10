@@ -24,6 +24,8 @@ class SimulatorConfig:
     noise_level: float = 1.0
     load_factor: float = 1.0
     max_history: int = 500  # Maximum timesteps to keep in memory
+    auto_maintenance_enabled: bool = False  # Enable automatic maintenance cycles
+    maintenance_cycle_period: int = 200  # Timesteps between automatic maintenance
 
 
 class SimulatorState:
@@ -45,6 +47,7 @@ class SimulatorManager:
         self.config: SimulatorConfig = SimulatorConfig()
         self.state: str = SimulatorState.STOPPED
         self.alert_threshold: float = 0.3  # Health threshold for alerts
+        self.last_maintenance_time: Dict[int, int] = {}  # Track last maintenance per motor
         
     def initialize(self, config: SimulatorConfig):
         """Initialize or reinitialize the factory simulator"""
@@ -63,6 +66,9 @@ class SimulatorManager:
         for motor in self.factory.motors:
             motor.state.load_factor *= config.load_factor
             motor.config["base_decay"] *= config.degradation_speed
+        
+        # Initialize maintenance tracking for all motors
+        self.last_maintenance_time = {motor.motor_id: 0 for motor in self.factory.motors}
         
         self.history = []
         self.current_time = 0
@@ -86,6 +92,10 @@ class SimulatorManager:
             
             new_records.extend(step_records)
             self.current_time += 1
+            
+            # Check for automatic maintenance cycles
+            if self.config.auto_maintenance_enabled:
+                self._check_and_perform_auto_maintenance()
         
         # Add to history
         self.history.extend(new_records)
@@ -127,6 +137,13 @@ class SimulatorManager:
         # Add alert status
         latest["alert"] = latest["bearing_health"] < self.alert_threshold
         
+        # Add next maintenance info if auto-maintenance is enabled
+        if self.config.auto_maintenance_enabled:
+            latest["steps_to_maintenance"] = latest["motor_id"].apply(
+                lambda mid: self.config.maintenance_cycle_period - 
+                (self.current_time - self.last_maintenance_time.get(mid, 0))
+            )
+        
         return latest
     
     def inject_failure(self, motor_id: int):
@@ -152,7 +169,23 @@ class SimulatorManager:
                 motor.state.bearing_health = 1.0
                 motor.state.misalignment = 0.05
                 motor.state.friction_coeff = REALISTIC_CONFIG["base_friction"]
+                # Update last maintenance time
+                self.last_maintenance_time[motor_id] = self.current_time
                 break
+    
+    def _check_and_perform_auto_maintenance(self):
+        """Check if any motors need automatic maintenance based on cycle period"""
+        if self.factory is None:
+            return
+        
+        for motor in self.factory.motors:
+            motor_id = motor.motor_id
+            last_maintenance = self.last_maintenance_time.get(motor_id, 0)
+            time_since_maintenance = self.current_time - last_maintenance
+            
+            # Perform maintenance if cycle period has elapsed
+            if time_since_maintenance >= self.config.maintenance_cycle_period:
+                self.reset_motor(motor_id)
     
     def get_alerts(self) -> List[Dict]:
         """Get list of motors with health below threshold"""
