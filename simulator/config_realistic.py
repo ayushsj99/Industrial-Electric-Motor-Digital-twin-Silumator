@@ -9,6 +9,11 @@ REALISTIC_CONFIG = {
     "base_decay": 0.0045,
     "base_friction": 0.05,
     "k_friction": 0.4,
+    
+    # Stochastic degradation (Phase 6 improvement)
+    "micro_damage_std": 0.0003,    # Slightly higher for realism
+    "shock_prob": 0.005,            # ~0.5% chance per step
+    "shock_scale": 0.008,           # Moderate shock magnitude
 
     # Temperature dynamics
     "alpha": 0.6,
@@ -44,4 +49,9 @@ REALISTIC_CONFIG = {
     # Slow sensor drift
     "temp_drift": 1e-4,
     "vibration_drift": 5e-5,
+    
+    # ------------------------
+    # Phase 6: Sensor Imperfections
+    # ------------------------
+    "enable_sensor_imperfections": True,  # Toggle sensor failures
 }

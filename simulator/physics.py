@@ -1,9 +1,61 @@
-def update_bearing_health(health, base_decay, load, misalignment):
+import numpy as np
+
+
+def update_bearing_health(
+    health, 
+    base_decay, 
+    load, 
+    misalignment,
+    micro_damage_std=0.0001,
+    shock_prob=0.008,
+    shock_scale=0.01
+):
     """
-    Bearing health degrades faster under load and misalignment.
+    Stochastic bearing health degradation with burst damage.
+    
+    Real bearings degrade through:
+    - Slow wear (base_decay)
+    - Micro-damage accumulation (random)
+    - Occasional shock events (pitting, cracks)
+    - Acceleration near failure
+    
+    Args:
+        health: Current bearing health [0, 1]
+        base_decay: Base decay rate
+        load: Load factor
+        misalignment: Misalignment factor
+        micro_damage_std: Standard deviation of micro-damage
+        shock_prob: Probability of shock event per timestep
+        shock_scale: Base magnitude of shock damage
+    
+    Returns:
+        Updated health value
     """
-    degradation = base_decay * load * (1 + misalignment)
-    return max(0.0, health - degradation)
+    # Base deterministic decay (load and misalignment dependent)
+    base_degradation = base_decay * load * (1 + misalignment)
+    
+    # Micro-damage: small random hits every step
+    # Mean = 0, so it oscillates but has net effect over time
+    micro_damage = np.abs(np.random.normal(0, micro_damage_std))
+    
+    # Shock damage: rare but larger drops
+    # Probability and magnitude increase as health decreases (damage begets damage)
+    shock_damage = 0.0
+    if np.random.random() < shock_prob:
+        # Shock magnitude scales with degradation level
+        degradation_factor = (1 - health) ** 0.5  # Worse health = bigger shocks
+        shock_damage = shock_scale * (1 + degradation_factor)
+    
+    # Total degradation
+    total_degradation = base_degradation + micro_damage + shock_damage
+    
+    # Accelerated degradation near failure (positive feedback)
+    # As health drops below 0.3, degradation accelerates
+    if health < 0.3:
+        acceleration_factor = 1.0 + (0.3 - health) * 2.0  # Up to 1.6x faster
+        total_degradation *= acceleration_factor
+    
+    return max(0.0, health - total_degradation)
 
 
 def update_friction(base_friction, bearing_health, k_friction):

@@ -26,6 +26,13 @@ from components.charts import (
     plot_correlation_heatmap,
     plot_realtime_dashboard
 )
+from components.advanced_charts import (
+    plot_health_with_bursts,
+    plot_sensor_response_lag,
+    plot_operating_regimes,
+    plot_maintenance_events,
+    plot_sensor_quality_indicators
+)
 from components.metrics import (
     render_kpi_metrics,
     render_alert_panel,
@@ -150,7 +157,7 @@ def main():
     # View mode selector
     view_mode = st.radio(
         "View Mode:",
-        ["Dashboard", "Detailed Analysis", "Fleet Status", "Raw Data"],
+        ["Dashboard", "Detailed Analysis", "Advanced Features", "Fleet Status", "Raw Data"],
         horizontal=True,
         key="view_mode_selector"
     )
@@ -168,6 +175,9 @@ def main():
     
     elif view_mode == "Detailed Analysis":
         render_analysis_view(manager, history_df, status_df)
+    
+    elif view_mode == "Advanced Features":
+        render_advanced_view(manager, history_df)
     
     elif view_mode == "Fleet Status":
         render_fleet_view(manager, status_df)
@@ -261,6 +271,60 @@ def render_analysis_view(manager, history_df, status_df):
     with col2:
         st.markdown("### Health vs Current")
         plot_health_vs_sensor(history_df, sensor="current")
+
+
+def render_advanced_view(manager, history_df):
+    """Render advanced features view (Phase 6 improvements)"""
+    
+    st.subheader("🚀 Advanced Features - Phase 6 Improvements")
+    
+    if history_df.empty:
+        st.info("No data available. Click **Step** to generate data.")
+        return
+    
+    st.markdown("""
+    This view showcases the industrial-grade improvements:
+    - **Stochastic Degradation**: Non-linear burst damage
+    - **Asynchronous Sensors**: Different response times
+    - **Operating Regimes**: Idle/Normal/Peak modes
+    - **Sensor Imperfections**: Realistic failures
+    - **Maintenance Events**: Intervention modeling
+    """)
+    
+    st.markdown("---")
+    
+    # Stochastic degradation
+    st.markdown("### 1️⃣ Stochastic Degradation with Burst Events")
+    st.markdown("Notice the **jagged health curves** with occasional sharp drops (red X markers)")
+    plot_health_with_bursts(history_df)
+    
+    st.markdown("---")
+    
+    # Asynchronous response
+    st.markdown("### 2️⃣ Asynchronous Sensor Response")
+    st.markdown("**Vibration** reacts immediately, **Current** lags slightly, **Temperature** lags significantly")
+    plot_sensor_response_lag(history_df)
+    
+    st.markdown("---")
+    
+    # Operating regimes
+    st.markdown("### 3️⃣ Operating Regime Transitions")
+    st.markdown("Watch how **Current** and **Temperature** respond to regime changes")
+    plot_operating_regimes(history_df)
+    
+    st.markdown("---")
+    
+    # Maintenance events
+    st.markdown("### 4️⃣ Maintenance Events")
+    st.markdown("Green stars (⭐) indicate maintenance interventions with partial health recovery")
+    plot_maintenance_events(history_df)
+    
+    st.markdown("---")
+    
+    # Sensor imperfections
+    st.markdown("### 5️⃣ Sensor Imperfections")
+    st.markdown("Red X markers show **missing data** from sensor failures")
+    plot_sensor_quality_indicators(history_df)
 
 
 def render_fleet_view(manager, status_df):

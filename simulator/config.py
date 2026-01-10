@@ -2,12 +2,19 @@ DEFAULT_CONFIG = {
     # Environment
     "ambient_temp": 25.0,
 
+    # ------------------------
     # Degradation & physics
+    # ------------------------
     "base_decay": 0.0001,
     "base_friction": 0.05,
     "k_friction": 0.4,
     "alpha": 0.8,
     "beta": 0.1,
+    
+    # Stochastic degradation (Phase 6 improvement)
+    "micro_damage_std": 0.0001,    # Micro-damage variance
+    "shock_prob": 0.008,            # ~0.8% chance per step
+    "shock_scale": 0.01,            # Base shock magnitude
 
     # Vibration
     "v_base": 0.5,
