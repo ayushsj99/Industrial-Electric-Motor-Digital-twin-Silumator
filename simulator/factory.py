@@ -1,7 +1,7 @@
 import copy
 import numpy as np
 from simulator.motor import Motor
-from simulator.state import MotorHiddenState
+from simulator.state import MotorHiddenState, HealthState, DegradationStage
 from simulator.config import DEFAULT_CONFIG
 from simulator.maintenance import MaintenanceScheduler
 
@@ -90,22 +90,64 @@ class FactorySimulator:
 
     def _create_motor(self, motor_id, base_config):
         """
-        Create one motor with a slightly different personality.
+        Create one motor with lognormal lifespan distribution and three-stage degradation.
         """
         config = copy.deepcopy(base_config)
 
         # ---- Motor personality (controlled variation) ----
         load_factor = 0.9 + 0.1 * motor_id          # increasing load
         misalignment = 0.02 * motor_id               # increasing misalignment
-        decay_scale = 1.0 + 0.15 * motor_id          # faster wear for later motors
 
-        config["base_decay"] *= decay_scale
-
+        # ---- Simple uniform lifespan distribution (1000-3000 hours) ----
+        min_hours = config.get("min_hours_to_critical", 1000)
+        max_hours = config.get("max_hours_to_critical", 3000)
+        total_lifespan_hours = np.random.uniform(min_hours, max_hours)
+        
+        # ---- Three-stage duration allocation ----
+        # Stage 0: 70-85% of life
+        stage_0_pct = np.random.uniform(
+            config.get("stage_0_min_pct", 0.70),
+            config.get("stage_0_max_pct", 0.85)
+        )
+        
+        # Stage 1: 12-22% of life
+        stage_1_pct = np.random.uniform(
+            config.get("stage_1_min_pct", 0.12),
+            config.get("stage_1_max_pct", 0.22)
+        )
+        
+        # Stage 2: Remaining (typically 5-10%)
+        stage_2_pct = 1.0 - stage_0_pct - stage_1_pct
+        
+        # Calculate stage durations in hours
+        stage_0_duration = total_lifespan_hours * stage_0_pct
+        stage_1_duration = total_lifespan_hours * stage_1_pct
+        stage_2_duration = total_lifespan_hours * stage_2_pct
+        
+        # ---- Stage-specific parameters ----
+        # Power law exponent for stage 1: b ∈ [1.5, 3.5]
+        stage_1_power_exp = np.random.uniform(
+            config.get("stage_1_power_exp_min", 1.5),
+            config.get("stage_1_power_exp_max", 3.5)
+        )
+        
+        # Exponential coefficient for stage 2 (calculated in physics)
+        stage_2_exp_coeff = 0.0  # Placeholder, calculated dynamically
+        
         state = MotorHiddenState(
-            bearing_health=1.0,
+            motor_health=config.get("stage_0_base_health", 0.95),
+            health_state=HealthState.HEALTHY,
+            degradation_stage=DegradationStage.STAGE_0_HEALTHY,
             load_factor=load_factor,
             misalignment=misalignment,
-            friction_coeff=config["base_friction"]
+            friction_coeff=config["base_friction"],
+            hours_since_maintenance=0.0,
+            target_hours_to_critical=total_lifespan_hours,
+            stage_0_duration_hours=stage_0_duration,
+            stage_1_duration_hours=stage_1_duration,
+            stage_2_duration_hours=stage_2_duration,
+            stage_1_power_exponent=stage_1_power_exp,
+            stage_2_exp_coefficient=stage_2_exp_coeff
         )
 
         motor = Motor(state, config)
@@ -159,12 +201,19 @@ class FactorySimulator:
         records = []
         for motor in self.motors:
             # -------------------------------
-            # Check for maintenance
+            # Automatic maintenance at critical state
+            # -------------------------------
+            if motor.state.health_state == HealthState.CRITICAL:
+                # Perform automatic maintenance
+                self._perform_automatic_maintenance(motor)
+            
+            # -------------------------------
+            # Check for scheduled maintenance
             # -------------------------------
             maintenance_type = self.maintenance_scheduler.should_perform_maintenance(
                 timestep=self.time,
                 motor_id=motor.motor_id,
-                bearing_health=motor.state.bearing_health
+                motor_health=motor.state.motor_health
             )
             
             if maintenance_type:
@@ -192,3 +241,51 @@ class FactorySimulator:
 
         self.time += 1
         return records
+    
+    def _perform_automatic_maintenance(self, motor):
+        """
+        Perform automatic maintenance when motor reaches critical state.
+        Resets motor to new lifecycle with fresh lognormal lifespan.
+        
+        Args:
+            motor: Motor instance to maintain
+        """
+        # Reset health to good condition
+        base_health = motor.config.get("stage_0_base_health", 0.95)
+        motor.state.motor_health = np.random.uniform(base_health - 0.02, base_health)
+        motor.state.health_state = HealthState.HEALTHY
+        motor.state.degradation_stage = DegradationStage.STAGE_0_HEALTHY
+        
+        # Reset operating hours counter
+        motor.state.hours_since_maintenance = 0.0
+        
+        # ---- Generate new random lifespan (1000-3000 hours) ----
+        min_hours = motor.config.get("min_hours_to_critical", 1000)
+        max_hours = motor.config.get("max_hours_to_critical", 3000)
+        total_lifespan_hours = np.random.uniform(min_hours, max_hours)
+        motor.state.target_hours_to_critical = total_lifespan_hours
+        
+        # ---- Regenerate three-stage durations ----
+        stage_0_pct = np.random.uniform(
+            motor.config.get("stage_0_min_pct", 0.70),
+            motor.config.get("stage_0_max_pct", 0.85)
+        )
+        stage_1_pct = np.random.uniform(
+            motor.config.get("stage_1_min_pct", 0.12),
+            motor.config.get("stage_1_max_pct", 0.22)
+        )
+        
+        motor.state.stage_0_duration_hours = total_lifespan_hours * stage_0_pct
+        motor.state.stage_1_duration_hours = total_lifespan_hours * stage_1_pct
+        motor.state.stage_2_duration_hours = total_lifespan_hours * (1.0 - stage_0_pct - stage_1_pct)
+        
+        # Regenerate stage-specific parameters
+        motor.state.stage_1_power_exponent = np.random.uniform(
+            motor.config.get("stage_1_power_exp_min", 1.5),
+            motor.config.get("stage_1_power_exp_max", 3.5)
+        )
+        motor.state.stage_2_exp_coefficient = 0.0
+        
+        # Partially reset other factors
+        motor.state.misalignment *= 0.3
+        motor.state.friction_coeff = motor.config["base_friction"] * 1.1

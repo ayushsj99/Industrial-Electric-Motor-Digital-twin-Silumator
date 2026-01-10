@@ -6,7 +6,7 @@ def build_supervised_dataset(
     sensor_cols,
     window_size=30,
     horizon=25,
-    health_col="bearing_health",
+    health_col="motor_health",
     motor_id_col="motor_id",
     time_col="time"
 ):

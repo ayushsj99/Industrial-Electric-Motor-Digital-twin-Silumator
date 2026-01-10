@@ -8,7 +8,7 @@ from typing import List, Dict
 
 def render_kpi_metrics(manager):
     """
-    Render top-level KPI metrics
+    Render top-level KPI metrics with categorical health states
     """
     status_df = manager.get_motor_status()
     
@@ -16,15 +16,18 @@ def render_kpi_metrics(manager):
         st.info("Initialize simulator to see metrics")
         return
     
-    # Calculate metrics
+    # Calculate metrics based on categorical states
     total_motors = len(status_df)
-    healthy_motors = len(status_df[status_df["bearing_health"] > 0.7])
-    warning_motors = len(status_df[(status_df["bearing_health"] <= 0.7) & (status_df["bearing_health"] > 0.4)])
-    critical_motors = len(status_df[status_df["bearing_health"] <= 0.4])
-    avg_health = status_df["bearing_health"].mean()
+    healthy_motors = len(status_df[status_df["health_state"] == "Healthy"])
+    warning_motors = len(status_df[status_df["health_state"] == "Warning"])
+    critical_motors = len(status_df[status_df["health_state"] == "Critical"])
+    avg_health = status_df["motor_health"].mean()
+    
+    # Calculate average operating hours
+    avg_hours = status_df.get("hours_since_maintenance", pd.Series([0])).mean()
     
     # Display metrics in columns
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
     
     with col1:
         st.metric(
@@ -38,7 +41,7 @@ def render_kpi_metrics(manager):
             label="✅ Healthy",
             value=healthy_motors,
             delta=None,
-            help="Health > 70%"
+            help="Health State: Healthy"
         )
     
     with col3:
@@ -46,7 +49,7 @@ def render_kpi_metrics(manager):
             label="⚠️ Warning",
             value=warning_motors,
             delta=None,
-            help="Health 40-70%"
+            help="Health State: Warning"
         )
     
     with col4:
@@ -54,7 +57,7 @@ def render_kpi_metrics(manager):
             label="🚨 Critical",
             value=critical_motors,
             delta=None,
-            help="Health < 40%"
+            help="Health State: Critical"
         )
     
     with col5:
@@ -63,11 +66,19 @@ def render_kpi_metrics(manager):
             value=f"{avg_health:.1%}",
             delta=None
         )
+    
+    with col6:
+        st.metric(
+            label="⏱️ Avg Hours",
+            value=f"{avg_hours:.0f}h",
+            delta=None,
+            help="Average operating hours since last maintenance"
+        )
 
 
 def render_alert_panel(alerts: List[Dict]):
     """
-    Render alert notifications
+    Render alert notifications with categorical health states
     """
     if not alerts:
         st.success("✅ All systems nominal")
@@ -76,48 +87,80 @@ def render_alert_panel(alerts: List[Dict]):
     st.warning(f"🚨 {len(alerts)} Active Alert(s)")
     
     for alert in alerts:
-        with st.expander(f"⚠️ Motor {alert['motor_id']} - Critical", expanded=True):
-            col1, col2, col3 = st.columns(3)
+        state = alert.get('health_state', 'Unknown')
+        icon = "🚨" if state == "Critical" else "⚠️"
+        
+        with st.expander(f"{icon} Motor {alert['motor_id']} - {state}", expanded=True):
+            col1, col2, col3, col4 = st.columns(4)
             
             with col1:
-                st.metric("Health", f"{alert['health']:.1%}")
+                st.metric("Health State", state)
             
             with col2:
-                st.metric("Vibration", f"{alert['vibration']:.2f}")
+                st.metric("Health Score", f"{alert['health']:.1%}")
             
             with col3:
-                st.metric("Temperature", f"{alert['temperature']:.1f}°C")
+                st.metric("Operating Hours", f"{alert.get('hours_since_maintenance', 0):.0f}h")
             
-            st.error("⚠️ Immediate maintenance recommended")
+            with col4:
+                st.metric("Vibration", f"{alert['vibration']:.2f}")
+            
+            if state == "Critical":
+                st.error("🚨 Motor in critical condition")
+            else:
+                st.warning("⚠️ Monitor closely - maintenance may be needed soon")
 
 
 def render_motor_table(status_df: pd.DataFrame):
     """
-    Render detailed motor status table
+    Render detailed motor status table with categorical health
     """
     if status_df.empty:
         st.info("No motor data available")
         return
     
-    # Prepare display dataframe
-    display_df = status_df[[
+    # Prepare display dataframe - include health_state and operating hours
+    columns_to_show = [
         "motor_id",
-        "bearing_health",
+        "health_state",
+        "motor_health",
+        "hours_since_maintenance",
         "temperature",
         "vibration",
         "current",
         "rpm"
-    ]].copy()
+    ]
+    
+    # Only include columns that exist
+    available_columns = [col for col in columns_to_show if col in status_df.columns]
+    display_df = status_df[available_columns].copy()
     
     # Format columns
-    display_df["bearing_health"] = display_df["bearing_health"].apply(lambda x: f"{x:.1%}")
-    display_df["temperature"] = display_df["temperature"].apply(lambda x: f"{x:.1f}°C")
-    display_df["vibration"] = display_df["vibration"].apply(lambda x: f"{x:.3f}")
-    display_df["current"] = display_df["current"].apply(lambda x: f"{x:.2f}A")
-    display_df["rpm"] = display_df["rpm"].apply(lambda x: f"{x:.0f}")
+    if "motor_health" in display_df.columns:
+        display_df["motor_health"] = display_df["motor_health"].apply(lambda x: f"{x:.1%}")
+    if "hours_since_maintenance" in display_df.columns:
+        display_df["hours_since_maintenance"] = display_df["hours_since_maintenance"].apply(lambda x: f"{x:.0f}h")
+    if "temperature" in display_df.columns:
+        display_df["temperature"] = display_df["temperature"].apply(lambda x: f"{x:.1f}°C")
+    if "vibration" in display_df.columns:
+        display_df["vibration"] = display_df["vibration"].apply(lambda x: f"{x:.3f}")
+    if "current" in display_df.columns:
+        display_df["current"] = display_df["current"].apply(lambda x: f"{x:.2f}A")
+    if "rpm" in display_df.columns:
+        display_df["rpm"] = display_df["rpm"].apply(lambda x: f"{x:.0f}")
     
-    # Rename columns
-    display_df.columns = ["Motor ID", "Health", "Temp", "Vibration", "Current", "RPM"]
+    # Rename columns for display
+    column_names = {
+        "motor_id": "Motor ID",
+        "health_state": "State",
+        "motor_health": "Health %",
+        "hours_since_maintenance": "Op Hours",
+        "temperature": "Temp",
+        "vibration": "Vibration",
+        "current": "Current",
+        "rpm": "RPM"
+    }
+    display_df.rename(columns={k: v for k, v in column_names.items() if k in display_df.columns}, inplace=True)
     
     # Add status indicator
     def get_status(health_str):
@@ -185,7 +228,7 @@ def render_fleet_overview(status_df: pd.DataFrame):
     
     with col1:
         st.write("**Health Distribution:**")
-        health_stats = status_df["bearing_health"].describe()
+        health_stats = status_df["motor_health"].describe()
         st.write(f"- Min: {health_stats['min']:.1%}")
         st.write(f"- Mean: {health_stats['mean']:.1%}")
         st.write(f"- Max: {health_stats['max']:.1%}")

@@ -21,7 +21,7 @@ def plot_health_with_bursts(df: pd.DataFrame):
     Visualize stochastic degradation with burst events highlighted.
     Shows the jagged, non-linear health decay.
     """
-    if df.empty or "bearing_health" not in df.columns:
+    if df.empty or "motor_health" not in df.columns:
         st.info("No health data available")
         return
     
@@ -36,7 +36,7 @@ def plot_health_with_bursts(df: pd.DataFrame):
             motor_df = df[df["motor_id"] == motor_id].copy()
             
             # Calculate step-to-step health drops to identify bursts
-            motor_df["health_drop"] = -motor_df["bearing_health"].diff()
+            motor_df["health_drop"] = -motor_df["motor_health"].diff()
             
             # Identify burst events (drops > 0.01)
             bursts = motor_df[motor_df["health_drop"] > 0.01]
@@ -44,7 +44,7 @@ def plot_health_with_bursts(df: pd.DataFrame):
             # Plot health line
             fig.add_trace(go.Scatter(
                 x=motor_df["time"],
-                y=motor_df["bearing_health"],
+                y=motor_df["motor_health"],
                 mode='lines',
                 name=f"Motor {motor_id}",
                 line=dict(width=2),
@@ -55,7 +55,7 @@ def plot_health_with_bursts(df: pd.DataFrame):
             if not bursts.empty:
                 fig.add_trace(go.Scatter(
                     x=bursts["time"],
-                    y=bursts["bearing_health"],
+                    y=bursts["motor_health"],
                     mode='markers',
                     name=f"Motor {motor_id} Bursts",
                     marker=dict(
@@ -69,7 +69,7 @@ def plot_health_with_bursts(df: pd.DataFrame):
     fig.update_layout(
         title="Stochastic Health Degradation (Burst Events Highlighted)",
         xaxis_title="Time Step",
-        yaxis_title="Bearing Health",
+        yaxis_title="Motor Health",
         height=400,
         hovermode='x unified'
     )
@@ -111,7 +111,7 @@ def plot_sensor_response_lag(df: pd.DataFrame):
     fig.add_trace(
         go.Scatter(
             x=motor_df["time"],
-            y=motor_df["bearing_health"],
+            y=motor_df["motor_health"],
             mode='lines',
             name="Health",
             line=dict(color='black', width=3)
@@ -248,7 +248,7 @@ def plot_maintenance_events(df: pd.DataFrame):
             # Plot health
             fig.add_trace(go.Scatter(
                 x=motor_df["time"],
-                y=motor_df["bearing_health"],
+                y=motor_df["motor_health"],
                 mode='lines',
                 name=f"Motor {motor_id}",
                 line=dict(width=2)
@@ -260,7 +260,7 @@ def plot_maintenance_events(df: pd.DataFrame):
             if not maintenance_df.empty:
                 fig.add_trace(go.Scatter(
                     x=maintenance_df["time"],
-                    y=maintenance_df["bearing_health"],
+                    y=maintenance_df["motor_health"],
                     mode='markers',
                     name=f"Motor {motor_id} Maintenance",
                     marker=dict(
@@ -275,7 +275,7 @@ def plot_maintenance_events(df: pd.DataFrame):
     fig.update_layout(
         title="Maintenance Events and Health Recovery",
         xaxis_title="Time Step",
-        yaxis_title="Bearing Health",
+        yaxis_title="Motor Health",
         height=500,
         hovermode='x unified',
         annotations=[

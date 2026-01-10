@@ -19,7 +19,7 @@ class MaintenanceEvent:
     motor_id: int
     pre_health: float
     post_health: float
-    maintenance_type: str  # 'bearing_replacement', 'lubrication', 'alignment'
+    maintenance_type: str  # 'component_replacement', 'lubrication', 'alignment'
 
 
 class MaintenanceScheduler:
@@ -43,7 +43,7 @@ class MaintenanceScheduler:
         self, 
         timestep: int, 
         motor_id: int, 
-        bearing_health: float
+        motor_health: float
     ) -> Optional[str]:
         """
         Decide if maintenance should be performed on a motor.
@@ -55,9 +55,9 @@ class MaintenanceScheduler:
             return None
         
         # Reactive maintenance (critical health)
-        if bearing_health < self.critical_health_threshold:
+        if motor_health < self.critical_health_threshold:
             if np.random.random() < self.reactive_prob_per_step:
-                return "bearing_replacement"
+                return "component_replacement"
         
         # Scheduled maintenance (periodic)
         if timestep % self.scheduled_interval < 10:  # Small window
@@ -83,12 +83,12 @@ class MaintenanceScheduler:
         Returns:
             MaintenanceEvent record
         """
-        pre_health = motor.state.bearing_health
+        pre_health = motor.state.motor_health
         
-        if maintenance_type == "bearing_replacement":
+        if maintenance_type == "component_replacement":
             # Major intervention
             # Health improves significantly but not to perfect
-            motor.state.bearing_health = np.random.uniform(0.75, 0.90)
+            motor.state.motor_health = np.random.uniform(0.75, 0.90)
             
             # Reset misalignment partially
             motor.state.misalignment *= 0.3
@@ -99,7 +99,7 @@ class MaintenanceScheduler:
         elif maintenance_type == "lubrication":
             # Minor intervention
             # Small health boost
-            motor.state.bearing_health = min(1.0, motor.state.bearing_health + 0.1)
+            motor.state.motor_health = min(1.0, motor.state.motor_health + 0.1)
             
             # Reduce friction temporarily
             motor.state.friction_coeff *= 0.8
@@ -107,9 +107,9 @@ class MaintenanceScheduler:
         elif maintenance_type == "alignment":
             # Alignment correction
             motor.state.misalignment *= 0.5
-            motor.state.bearing_health = min(1.0, motor.state.bearing_health + 0.05)
+            motor.state.motor_health = min(1.0, motor.state.motor_health + 0.05)
         
-        post_health = motor.state.bearing_health
+        post_health = motor.state.motor_health
         
         # Record event
         event = MaintenanceEvent(

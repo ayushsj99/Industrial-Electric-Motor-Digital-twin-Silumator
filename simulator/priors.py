@@ -16,7 +16,7 @@ They are consumed by the simulator during initialization.
 
 DEFAULT_HIDDEN_STATE_PRIORS = {
     # Engines start healthy, but not identical
-    "bearing_health": {
+    "motor_health": {
         "distribution": "uniform",
         "min": 0.92,
         "max": 1.00
@@ -80,11 +80,11 @@ DEGRADATION_STRUCTURE_PRIORS = {
 
 # -------------------------------
 # Phase 4D — Vibration Realism Priors
-# (learned from CWRU bearing dataset)
+# (learned from real-world motor data)
 # -------------------------------
 
 VIBRATION_PRIORS = {
-    # Baseline vibration always exists (healthy bearings)
+    # Baseline vibration always exists (healthy motors)
     "baseline_vibration": {
         "exists": True,
         "relative_level": "low",   # healthy RMS is small but non-zero

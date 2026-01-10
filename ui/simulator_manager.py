@@ -23,9 +23,10 @@ class SimulatorConfig:
     degradation_speed: float = 1.0
     noise_level: float = 1.0
     load_factor: float = 1.0
-    max_history: int = 500  # Maximum timesteps to keep in memory
-    auto_maintenance_enabled: bool = False  # Enable automatic maintenance cycles
-    maintenance_cycle_period: int = 200  # Timesteps between automatic maintenance
+    max_history: int = 2000  # Maximum timesteps to keep (5-min intervals, ~7 days)
+    auto_maintenance_enabled: bool = True  # Enable automatic maintenance at critical
+    maintenance_cycle_period: int = 3600  # Hours between scheduled maintenance checks
+
 
 
 class SimulatorState:
@@ -134,14 +135,15 @@ class SimulatorManager:
         # Get latest reading for each motor
         latest = df.groupby("motor_id").last().reset_index()
         
-        # Add alert status
-        latest["alert"] = latest["bearing_health"] < self.alert_threshold
+        # Add alert status based on health state
+        latest["alert"] = latest["health_state"].isin(["Critical", "Warning"])
         
-        # Add next maintenance info if auto-maintenance is enabled
-        if self.config.auto_maintenance_enabled:
-            latest["steps_to_maintenance"] = latest["motor_id"].apply(
-                lambda mid: self.config.maintenance_cycle_period - 
-                (self.current_time - self.last_maintenance_time.get(mid, 0))
+        # Calculate estimated hours to critical (if not already critical)
+        if "target_hours_to_critical" in latest.columns:
+            latest["est_hours_remaining"] = latest.apply(
+                lambda row: max(0, row.get("target_hours_to_critical", 0) - row.get("hours_since_maintenance", 0))
+                if row["health_state"] != "Critical" else 0,
+                axis=1
             )
         
         return latest
@@ -153,8 +155,8 @@ class SimulatorManager:
         
         for motor in self.factory.motors:
             if motor.motor_id == motor_id:
-                # Drastically reduce bearing health
-                motor.state.bearing_health = 0.1
+                # Drastically reduce motor health
+                motor.state.motor_health = 0.1
                 motor.state.misalignment += 0.3
                 motor.state.friction_coeff *= 2.0
                 break
@@ -166,7 +168,7 @@ class SimulatorManager:
         
         for motor in self.factory.motors:
             if motor.motor_id == motor_id:
-                motor.state.bearing_health = 1.0
+                motor.state.motor_health = 1.0
                 motor.state.misalignment = 0.05
                 motor.state.friction_coeff = REALISTIC_CONFIG["base_friction"]
                 # Update last maintenance time
@@ -188,7 +190,7 @@ class SimulatorManager:
                 self.reset_motor(motor_id)
     
     def get_alerts(self) -> List[Dict]:
-        """Get list of motors with health below threshold"""
+        """Get list of motors with Warning or Critical health status"""
         status = self.get_motor_status()
         
         if status.empty:
@@ -199,7 +201,9 @@ class SimulatorManager:
         return [
             {
                 "motor_id": alert["motor_id"],
-                "health": alert["bearing_health"],
+                "health_state": alert["health_state"],
+                "health": alert["motor_health"],
+                "hours_since_maintenance": alert.get("hours_since_maintenance", 0),
                 "vibration": alert["vibration"],
                 "temperature": alert["temperature"]
             }

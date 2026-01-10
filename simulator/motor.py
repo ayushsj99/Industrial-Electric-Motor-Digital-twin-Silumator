@@ -25,7 +25,7 @@ class Motor:
         # Health history buffer for sensor lag simulation
         # Different sensors "see" different time windows
         max_window = 30  # Keep last 30 timesteps
-        self.health_history = deque([state.bearing_health], maxlen=max_window)
+        self.health_history = deque([state.motor_health], maxlen=max_window)
         
         # Sensor-specific window sizes (in timesteps)
         self.sensor_windows = {
@@ -47,7 +47,7 @@ class Motor:
         # Health history buffer for sensor lag simulation
         # Different sensors "see" different time windows
         max_window = 30  # Keep last 30 timesteps
-        self.health_history = deque([state.bearing_health], maxlen=max_window)
+        self.health_history = deque([state.motor_health], maxlen=max_window)
         
         # Sensor-specific window sizes (in timesteps)
         self.sensor_windows = {
@@ -75,33 +75,55 @@ class Motor:
 
     def step(self):
         """
-        Advance the motor by one timestep.
+        Advance the motor by one timestep (5 minutes of operation).
         """
+        
+        # Update operating hours (5 minutes = 1/12 hour)
+        time_step_hours = self.config.get("time_step_minutes", 5) / 60.0
+        self.state.hours_since_maintenance += time_step_hours
 
         # -------------------------
-        # 1. Update hidden health
+        # 1. Update degradation stage and hidden health
         # -------------------------
-        self.state.bearing_health = phys.update_bearing_health(
-            health=self.state.bearing_health,
-            base_decay=self.config["base_decay"],
-            load=self.state.load_factor,
-            misalignment=self.state.misalignment,
-            micro_damage_std=self.config.get("micro_damage_std", 0.0001),
-            shock_prob=self.config.get("shock_prob", 0.008),
-            shock_scale=self.config.get("shock_scale", 0.01)
+        # First, determine current degradation stage
+        self.state.degradation_stage = phys.determine_degradation_stage(
+            hours_since_maintenance=self.state.hours_since_maintenance,
+            stage_0_duration=self.state.stage_0_duration_hours,
+            stage_1_duration=self.state.stage_1_duration_hours,
+            stage_2_duration=self.state.stage_2_duration_hours
+        )
+        
+        # Update health using three-stage model
+        self.state.motor_health = phys.update_motor_health(
+            self.state.motor_health,
+            self.state.hours_since_maintenance,
+            self.state.degradation_stage,
+            self.state.stage_0_duration_hours,
+            self.state.stage_1_duration_hours,
+            self.state.stage_2_duration_hours,
+            self.state.stage_1_power_exponent,
+            self.state.stage_2_exp_coefficient,
+            self.config
+        )
+        
+        # Update categorical health state
+        self.state.health_state = phys.determine_health_state(
+            self.state.motor_health,
+            healthy_threshold=self.config.get("healthy_threshold", 0.7),
+            warning_threshold=self.config.get("warning_threshold", 0.4)
         )
         
         # Add current health to history buffer
-        self.health_history.append(self.state.bearing_health)
+        self.health_history.append(self.state.motor_health)
 
         self.state.friction_coeff = phys.update_friction(
             base_friction=self.config["base_friction"],
-            bearing_health=self.state.bearing_health,
+            motor_health=self.state.motor_health,
             k_friction=self.config["k_friction"]
         )
 
         # -------------------------
-        # 2. Update temperature
+        # 2. Update temperature (instantaneous reading)
         # -------------------------
         self.temperature = phys.update_temperature(
             temp=self.temperature,
@@ -113,18 +135,21 @@ class Motor:
         )
 
         # -------------------------
-        # 3. Ideal (noise-free) sensors
+        # 3. Sensor readings
         # -------------------------
-        # Each sensor sees a different "effective" health based on its response time
-        
-        # Vibration: immediate response (current health)
+        # Vibration: 20-second aggregated reading (RMS of multiple samples)
         vibration_health = self.get_effective_health("vibration")
+        vibration_duration = self.config.get("vibration_sample_duration", 20)
+        vibration_rate = self.config.get("vibration_sample_rate", 10)
+        
         vibration = phys.compute_vibration(
-            bearing_health=vibration_health,
+            motor_health=vibration_health,
             misalignment=self.state.misalignment,
             v_base=self.config["v_base"],
             k_health=self.config["k_v_health"],
-            k_align=self.config["k_v_align"]
+            k_align=self.config["k_v_align"],
+            duration=vibration_duration,
+            sample_rate=vibration_rate
         )
 
         # Current: short lag (5-step average)
@@ -132,7 +157,7 @@ class Motor:
         current = phys.compute_current(
             base_current=self.config["base_current"],
             load=self.state.load_factor,
-            bearing_health=current_health,
+            motor_health=current_health,
             k_current=self.config["k_current"]
         )
         
@@ -195,5 +220,8 @@ class Motor:
             "vibration": vibration,
             "current": current,
             "rpm": rpm,
-            "bearing_health": self.state.bearing_health
+            "motor_health": self.state.motor_health,
+            "health_state": self.state.health_state.value,
+            "hours_since_maintenance": self.state.hours_since_maintenance,
+            "degradation_stage": self.state.degradation_stage.value
         }

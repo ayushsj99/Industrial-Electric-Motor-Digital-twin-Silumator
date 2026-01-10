@@ -147,11 +147,11 @@ def plot_health_bars(status_df: pd.DataFrame):
         return
     
     # Sort by health
-    status_df = status_df.sort_values("bearing_health")
+    status_df = status_df.sort_values("motor_health")
     
     # Color bars based on health
     colors = []
-    for health in status_df["bearing_health"]:
+    for health in status_df["motor_health"]:
         if health > 0.7:
             colors.append("#2ecc71")  # Green - healthy
         elif health > 0.4:
@@ -163,10 +163,10 @@ def plot_health_bars(status_df: pd.DataFrame):
     
     fig.add_trace(go.Bar(
         y=[f"Motor {mid}" for mid in status_df["motor_id"]],
-        x=status_df["bearing_health"],
+        x=status_df["motor_health"],
         orientation='h',
         marker=dict(color=colors),
-        text=[f"{h:.2%}" for h in status_df["bearing_health"]],
+        text=[f"{h:.2%}" for h in status_df["motor_health"]],
         textposition='auto',
         hovertemplate=(
             "<b>Motor %{y}</b><br>" +
@@ -177,7 +177,7 @@ def plot_health_bars(status_df: pd.DataFrame):
     
     fig.update_layout(
         title="Motor Health Status",
-        xaxis_title="Bearing Health",
+        xaxis_title="Motor Health",
         yaxis_title="Motor ID",
         height=max(300, len(status_df) * 40),
         xaxis=dict(range=[0, 1]),
@@ -216,7 +216,7 @@ def plot_health_vs_sensor(df: pd.DataFrame, sensor: str = "vibration"):
             motor_df = df[df["motor_id"] == motor_id]
             
             fig.add_trace(go.Scatter(
-                x=motor_df["bearing_health"],
+                x=motor_df["motor_health"],
                 y=motor_df[sensor],
                 mode='markers',
                 name=f"Motor {motor_id}",
@@ -228,15 +228,15 @@ def plot_health_vs_sensor(df: pd.DataFrame, sensor: str = "vibration"):
             ))
     else:
         fig.add_trace(go.Scatter(
-            x=df["bearing_health"],
+            x=df["motor_health"],
             y=df[sensor],
             mode='markers',
             marker=dict(size=4, opacity=0.6)
         ))
     
     fig.update_layout(
-        title=f"Bearing Health vs {sensor.title()}",
-        xaxis_title="Bearing Health",
+        title=f"Motor Health vs {sensor.title()}",
+        xaxis_title="Motor Health",
         yaxis_title=sensor.title(),
         height=400,
         hovermode='closest'
@@ -257,7 +257,7 @@ def plot_correlation_heatmap(df: pd.DataFrame):
         return
     
     # Select numeric columns
-    numeric_cols = ["temperature", "vibration", "current", "rpm", "bearing_health"]
+    numeric_cols = ["temperature", "vibration", "current", "rpm", "motor_health"]
     
     # Filter columns that exist
     available_cols = [col for col in numeric_cols if col in df.columns]
@@ -305,7 +305,7 @@ def plot_realtime_dashboard(df: pd.DataFrame, window: int = 50):
     # Create 2-row dashboard
     fig = make_subplots(
         rows=2, cols=1,
-        subplot_titles=("Bearing Health", "Sensor Readings"),
+        subplot_titles=("Motor Health", "Sensor Readings"),
         row_heights=[0.4, 0.6],
         vertical_spacing=0.15
     )
@@ -325,7 +325,7 @@ def plot_realtime_dashboard(df: pd.DataFrame, window: int = 50):
             fig.add_trace(
                 go.Scatter(
                     x=motor_df["time"],
-                    y=motor_df["bearing_health"],
+                    y=motor_df["motor_health"],
                     mode='lines+markers',
                     name=f"Motor {motor_id}",
                     line=dict(color=color, width=2),
