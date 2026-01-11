@@ -98,7 +98,8 @@ def main():
             abs(config.noise_level - manager.config.noise_level) > 0.01 or
             abs(config.load_factor - manager.config.load_factor) > 0.01 or
             config.auto_maintenance_enabled != manager.config.auto_maintenance_enabled or
-            config.maintenance_cycle_period != manager.config.maintenance_cycle_period
+            config.maintenance_cycle_period != manager.config.maintenance_cycle_period or
+            config.generation_mode != manager.config.generation_mode
         )
         
         if config_changed:
@@ -215,7 +216,7 @@ def render_dashboard_view(manager, history_df, status_df, alerts):
     with col1:
         st.subheader("📈 Real-time Monitoring")
         if not history_df.empty:
-            plot_realtime_dashboard(history_df, window=100)
+            plot_realtime_dashboard(history_df)
         else:
             st.info("Click **Step** to generate data")
     

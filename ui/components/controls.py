@@ -15,6 +15,22 @@ def render_control_panel(manager: SimulatorManager) -> SimulatorConfig:
     # Simulator Configuration Section
     st.sidebar.subheader("Simulator Configuration")
     
+    # Generation Mode Selector
+    generation_mode = st.sidebar.radio(
+        "Generation Mode",
+        options=["live", "instantaneous"],
+        format_func=lambda x: "🔴 Live Mode" if x == "live" else "⚡ Instantaneous Mode",
+        help="Live: Step-by-step generation | Instantaneous: Generate until all motors reach critical",
+        horizontal=False
+    )
+    
+    if generation_mode == "instantaneous":
+        st.sidebar.info("⚡ Instant mode: Generates data until all motors reach critical state")
+    else:
+        st.sidebar.info("🔴 Live mode: Step-by-step data generation with real-time updates")
+    
+    st.sidebar.markdown("---")
+    
     num_motors = st.sidebar.slider(
         "Number of Motors",
         min_value=1,
@@ -71,7 +87,8 @@ def render_control_panel(manager: SimulatorManager) -> SimulatorConfig:
         noise_level=noise_level,
         load_factor=load_factor,
         auto_maintenance_enabled=True,
-        maintenance_cycle_period=500
+        maintenance_cycle_period=500,
+        generation_mode=generation_mode
     )
     
     return config
@@ -85,42 +102,72 @@ def render_simulation_controls(manager: SimulatorManager):
     
     st.sidebar.subheader("Simulation Controls")
     
-    # Primary controls: Play/Pause/Stop
-    col1, col2, col3 = st.sidebar.columns(3)
+    # Check if instantaneous mode
+    is_instantaneous = manager.config.generation_mode == "instantaneous"
     
-    with col1:
-        if manager.state == SimulatorState.RUNNING:
-            if st.button("⏸️ Pause", use_container_width=True, help="Pause simulation"):
-                manager.pause()
+    if is_instantaneous:
+        # Instantaneous mode: Single button to generate all data
+        st.sidebar.info("⚡ **Instantaneous Mode Active**")
+        st.sidebar.markdown("Click below to generate data until all motors reach critical:")
+        
+        if st.sidebar.button(
+            "⚡ Generate Until All Critical",
+            use_container_width=True,
+            type="primary",
+            help="Generate data until all motors have reached critical state at least once"
+        ):
+            with st.spinner("Generating data... This may take a moment..."):
+                manager.generate_until_all_critical()
+            st.success("✓ Data generation complete!")
+            st.rerun()
+        
+        st.sidebar.markdown("---")
+        st.sidebar.caption("💡 Motors will auto-reset when reaching critical and continue until all motors have experienced failure.")
+    
+    else:
+        # Live mode: Normal play/pause controls
+        st.sidebar.info("🔴 **Live Mode Active**")
+        
+        # Primary controls: Play/Pause/Stop
+        col1, col2, col3 = st.sidebar.columns(3)
+        
+        with col1:
+            if manager.state == SimulatorState.RUNNING:
+                if st.button("⏸️ Pause", use_container_width=True, help="Pause simulation"):
+                    manager.pause()
+                    st.rerun()
+            else:
+                if st.button("▶️ Play", use_container_width=True, help="Start/Resume simulation"):
+                    manager.resume()
+                    st.rerun()
+        
+        with col2:
+            if st.button("⏹️ Stop", use_container_width=True, help="Stop simulation"):
+                manager.stop()
                 st.rerun()
-        else:
-            if st.button("▶️ Play", use_container_width=True, help="Start/Resume simulation"):
-                manager.resume()
+        
+        with col3:
+            if st.button("🔄 Restart", use_container_width=True, help="Restart from beginning"):
+                manager.restart()
+                st.rerun()
+        
+        st.sidebar.markdown("**Manual Step Controls:**")
+        
+        col1, col2 = st.sidebar.columns(2)
+        
+        with col1:
+            if st.button("➡️ +1", use_container_width=True, help="Advance by 1 timestep"):
+                manager.step(num_steps=1)
+                st.rerun()
+        
+        with col2:
+            if st.button("⏩ +10", use_container_width=True, help="Advance by 10 timesteps"):
+                manager.step(num_steps=10)
                 st.rerun()
     
-    with col2:
-        if st.button("⏹️ Stop", use_container_width=True, help="Stop simulation"):
-            manager.stop()
-            st.rerun()
-    
-    with col3:
-        if st.button("🔄 Restart", use_container_width=True, help="Restart from beginning"):
-            manager.restart()
-            st.rerun()
-    
-    st.sidebar.markdown("**Manual Step Controls:**")
-    
-    col1, col2 = st.sidebar.columns(2)
-    
-    with col1:
-        if st.button("➡️ +1", use_container_width=True, help="Advance by 1 timestep"):
-            manager.step(num_steps=1)
-            st.rerun()
-    
-    with col2:
-        if st.button("⏩ +10", use_container_width=True, help="Advance by 10 timesteps"):
-            manager.step(num_steps=10)
-            st.rerun()
+    # Additional step controls (available in both modes for manual stepping)
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("**Quick Step Controls:**")
     
     col3, col4 = st.sidebar.columns(2)
     
@@ -134,31 +181,37 @@ def render_simulation_controls(manager: SimulatorManager):
             manager.step(num_steps=100)
             st.rerun()
     
-    # Auto-run mode
+    # Auto-run mode (only for live mode)
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**Auto-Run Settings:**")
     
     from simulator_manager import SimulatorState
     
-    step_interval = st.sidebar.slider(
-        "Steps per update",
-        min_value=1,
-        max_value=50,
-        value=5,
-        help="How many steps to take each update"
-    )
+    is_auto_running = False
+    step_interval = 10
+    refresh_rate = 0.5
     
-    refresh_rate = st.sidebar.slider(
-        "Refresh rate (seconds)",
-        min_value=0.1,
-        max_value=5.0,
-        value=1.0,
-        step=0.1,
-        help="How often to update"
-    )
-    
-    # Return whether auto-run is active
-    is_auto_running = manager.state == SimulatorState.RUNNING
+    if not is_instantaneous:
+        st.sidebar.markdown("**Auto-Run Settings:**")
+        
+        step_interval = st.sidebar.slider(
+            "Steps per update",
+            min_value=1,
+            max_value=200,
+            value=10,
+            help="How many timesteps to generate per update (higher = faster data generation)"
+        )
+        
+        refresh_rate = st.sidebar.slider(
+            "Refresh rate (seconds)",
+            min_value=0.1,
+            max_value=5.0,
+            value=0.5,
+            step=0.1,
+            help="How often to update the display"
+        )
+        
+        # Return whether auto-run is active
+        is_auto_running = manager.state == SimulatorState.RUNNING
     
     return is_auto_running, step_interval, refresh_rate
 

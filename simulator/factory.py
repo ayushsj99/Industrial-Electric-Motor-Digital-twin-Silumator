@@ -83,6 +83,12 @@ class FactorySimulator:
         # Phase 6: Maintenance Events
         # -------------------------------
         self.maintenance_scheduler = MaintenanceScheduler(enable_maintenance=enable_maintenance)
+        
+        # Track automatic maintenance scheduling
+        # Key: motor_id, Value: scheduled timestep for maintenance
+        self.scheduled_automatic_maintenance = {}
+        # Track previous health state to detect entry into critical
+        self.previous_health_states = {}
 
         for motor_id in range(num_motors):
             motor = self._create_motor(motor_id, base_config)
@@ -201,11 +207,35 @@ class FactorySimulator:
         records = []
         for motor in self.motors:
             # -------------------------------
-            # Automatic maintenance at critical state
+            # Track entry into critical state and schedule maintenance
             # -------------------------------
-            if motor.state.health_state == HealthState.CRITICAL:
+            motor_id = motor.motor_id
+            prev_state = self.previous_health_states.get(motor_id)
+            current_state = motor.state.health_state
+            
+            # Detect transition into critical state
+            if (prev_state != HealthState.CRITICAL and 
+                current_state == HealthState.CRITICAL and 
+                motor_id not in self.scheduled_automatic_maintenance):
+                # Schedule maintenance randomly within 1 day (24 hours = 288 timesteps)
+                delay = np.random.randint(1, 289)  # 1 to 288 timesteps (5 min to 24 hours)
+                self.scheduled_automatic_maintenance[motor_id] = self.time + delay
+            
+            # Update previous state tracker
+            self.previous_health_states[motor_id] = current_state
+            
+            # -------------------------------
+            # Check for scheduled automatic maintenance
+            # -------------------------------
+            automatic_maintenance_occurred = False
+            if (motor_id in self.scheduled_automatic_maintenance and 
+                self.time >= self.scheduled_automatic_maintenance[motor_id] and
+                motor.state.motor_health < 0.30):  # Only if health < 30%
                 # Perform automatic maintenance
                 self._perform_automatic_maintenance(motor)
+                automatic_maintenance_occurred = True
+                # Remove from schedule
+                del self.scheduled_automatic_maintenance[motor_id]
             
             # -------------------------------
             # Check for scheduled maintenance
@@ -236,7 +266,13 @@ class FactorySimulator:
             sensors["time"] = self.time
             sensors["motor_id"] = motor.motor_id
             sensors["regime"] = self.current_regime  # Add regime to output
-            sensors["maintenance_event"] = maintenance_type  # Add maintenance flag
+            
+            # Label maintenance events (prioritize automatic over scheduled)
+            if automatic_maintenance_occurred:
+                sensors["maintenance_event"] = "automatic_maintenance"
+            else:
+                sensors["maintenance_event"] = maintenance_type
+            
             records.append(sensors)
 
         self.time += 1

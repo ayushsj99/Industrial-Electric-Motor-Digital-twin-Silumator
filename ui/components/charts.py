@@ -290,17 +290,16 @@ def plot_correlation_heatmap(df: pd.DataFrame):
     st.plotly_chart(fig, use_container_width=True)
 
 
-def plot_realtime_dashboard(df: pd.DataFrame, window: int = 50):
+def plot_realtime_dashboard(df: pd.DataFrame):
     """
-    Create a compact real-time dashboard view
+    Create a compact dashboard view showing full time series
     """
     if df.empty:
         st.info("No data available yet")
         return
     
-    # Get recent data
-    max_time = df["time"].max()
-    recent_df = df[df["time"] >= max_time - window]
+    # Use all available data (no windowing)
+    recent_df = df
     
     # Create 2-row dashboard
     fig = make_subplots(

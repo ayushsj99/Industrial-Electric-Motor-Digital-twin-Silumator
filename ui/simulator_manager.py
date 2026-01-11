@@ -26,6 +26,7 @@ class SimulatorConfig:
     max_history: int = 2000  # Maximum timesteps to keep (5-min intervals, ~7 days)
     auto_maintenance_enabled: bool = True  # Enable automatic maintenance at critical
     maintenance_cycle_period: int = 3600  # Hours between scheduled maintenance checks
+    generation_mode: str = "live"  # "live" or "instantaneous"
 
 
 
@@ -113,6 +114,65 @@ class SimulatorManager:
         if not self.history:
             return pd.DataFrame()
         return pd.DataFrame(self.history)
+    
+    def generate_until_all_critical(self, max_steps: int = 50000) -> pd.DataFrame:
+        """
+        Instantaneous generation: Generate data until ALL motors reach critical stage.
+        Motors that reach critical first will auto-reset and continue until the last motor reaches critical.
+        
+        Parameters
+        ----------
+        max_steps : int
+            Maximum steps to prevent infinite loops
+            
+        Returns
+        -------
+        pd.DataFrame
+            All generated data
+        """
+        if self.factory is None:
+            raise ValueError("Factory not initialized. Call initialize() first.")
+        
+        new_records = []
+        motors_reached_critical = set()
+        total_motors = self.config.num_motors
+        steps_taken = 0
+        
+        while len(motors_reached_critical) < total_motors and steps_taken < max_steps:
+            # Step simulation
+            step_records = self.factory.step()
+            
+            # Add timestamp to each record
+            for record in step_records:
+                record["time"] = self.current_time
+                
+                # Check if this motor reached critical for the first time
+                motor_id = record["motor_id"]
+                health_state = record.get("health_state", "Healthy")
+                
+                if health_state == "Critical" and motor_id not in motors_reached_critical:
+                    motors_reached_critical.add(motor_id)
+                    print(f"Motor {motor_id} reached critical at step {self.current_time} ({len(motors_reached_critical)}/{total_motors})")
+            
+            new_records.extend(step_records)
+            self.current_time += 1
+            steps_taken += 1
+            
+            # Check for automatic maintenance (motors will auto-reset)
+            if self.config.auto_maintenance_enabled:
+                self._check_and_perform_auto_maintenance()
+        
+        # Add all records to history
+        self.history.extend(new_records)
+        
+        # Trim history if too large
+        if len(self.history) > self.config.max_history * self.config.num_motors:
+            excess = len(self.history) - self.config.max_history * self.config.num_motors
+            self.history = self.history[excess:]
+        
+        print(f"\n✓ Generation complete: {steps_taken} steps, all {total_motors} motors reached critical")
+        
+        return pd.DataFrame(new_records)
     
     def get_recent_history(self, last_n_steps: int = 100) -> pd.DataFrame:
         """Get recent history as DataFrame"""
