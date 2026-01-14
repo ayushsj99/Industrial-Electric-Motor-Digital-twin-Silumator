@@ -74,6 +74,7 @@ instance/
 # Sphinx documentation
 docs/_build/
 DEPLOY_TO_HF.md
+HUGGINGFACE_DEPLOYMENT.md
 # PyBuilder
 .pybuilder/
 target/
@@ -82,8 +83,18 @@ AUTOMATIC_MAINTENANCE_IMPLEMENTATION.md
 PHYSICS_AND_LOGIC_DETAILED.md
 APP_DOCUMENTATION.md
 
+# Unnecessary files for Hugging Face deployment
+main.py
+app.py
+src/
+data/archive/
+data/simulated/
+notebooks/eda_results/
+
 # Jupyter Notebook
 .ipynb_checkpoints
+*.ipynb
+notebooks/
 
 # IPython
 profile_default/
