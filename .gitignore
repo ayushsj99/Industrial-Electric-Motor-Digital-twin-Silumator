@@ -90,6 +90,8 @@ src/
 data/archive/
 data/simulated/
 notebooks/eda_results/
+*.png
+*.zip
 
 # Jupyter Notebook
 .ipynb_checkpoints
