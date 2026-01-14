@@ -92,6 +92,8 @@ data/simulated/
 notebooks/eda_results/
 *.png
 *.zip
+.streamlit/
+streamlit_app.py
 
 # Jupyter Notebook
 .ipynb_checkpoints
