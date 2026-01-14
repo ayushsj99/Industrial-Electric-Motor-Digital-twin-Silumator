@@ -15,7 +15,6 @@ if project_root not in sys.path:
 try:
     from ui.simulator_manager import SimulatorManager, SimulatorConfig
 except ImportError:
-    try:
     from ui.simulator_manager import SimulatorManager, SimulatorConfig
 except ImportError:
     from simulator_manager import SimulatorManager, SimulatorConfig
