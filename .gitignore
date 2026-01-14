@@ -85,7 +85,7 @@ APP_DOCUMENTATION.md
 
 # Unnecessary files for Hugging Face deployment
 main.py
-app.py
+# app.py is now needed for HF deployment - DO NOT IGNORE
 src/
 data/archive/
 data/simulated/

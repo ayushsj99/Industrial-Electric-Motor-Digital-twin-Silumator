@@ -77,13 +77,18 @@ except ImportError:
     )
 
 
-# Page configuration
-st.set_page_config(
-    page_title="Industrial Maintenance Simulator",
-    page_icon="🏭",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# Page configuration - moved to root app.py for Hugging Face deployment
+# Keeping this here for standalone use but wrapped in try-except
+try:
+    st.set_page_config(
+        page_title="Industrial Maintenance Simulator",
+        page_icon="🏭",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+except st.errors.StreamlitAPIException:
+    # Page config already set (e.g., by root app.py)
+    pass
 
 
 def initialize_session_state():
