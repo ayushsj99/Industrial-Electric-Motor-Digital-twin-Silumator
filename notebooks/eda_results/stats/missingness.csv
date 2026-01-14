@@ -1,0 +1,14 @@
+column,missing_fraction
+temperature,0.004
+vibration,0.0069
+current,0.0048
+rpm,0.0061
+motor_health,0.0
+health_state,0.0
+hours_since_maintenance,0.0
+degradation_stage,0.0
+time,0.0
+motor_id,0.0
+regime,0.0
+maintenance_event,0.9957
+RUL,0.0

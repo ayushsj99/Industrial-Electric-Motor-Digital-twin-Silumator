@@ -78,6 +78,10 @@ docs/_build/
 .pybuilder/
 target/
 
+
+PHYSICS_AND_LOGIC_DETAILED.md
+APP_DOCUMENTATION.md
+
 # Jupyter Notebook
 .ipynb_checkpoints
 
