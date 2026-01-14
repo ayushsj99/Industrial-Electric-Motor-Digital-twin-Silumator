@@ -12,34 +12,70 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-from simulator_manager import SimulatorManager, SimulatorConfig
-from components.controls import (
-    render_control_panel,
-    render_simulation_controls,
-    render_motor_actions,
-    render_export_controls
-)
-from components.charts import (
-    plot_sensor_grid,
-    plot_health_bars,
-    plot_health_vs_sensor,
-    plot_correlation_heatmap,
-    plot_realtime_dashboard
-)
-from components.advanced_charts import (
-    plot_health_with_bursts,
-    plot_sensor_response_lag,
-    plot_operating_regimes,
-    plot_maintenance_events,
-    plot_sensor_quality_indicators
-)
-from components.metrics import (
-    render_kpi_metrics,
-    render_alert_panel,
-    render_motor_table,
-    render_simulation_info,
-    render_fleet_overview
-)
+try:
+    from ui.simulator_manager import SimulatorManager, SimulatorConfig
+except ImportError:
+    try:
+    from ui.simulator_manager import SimulatorManager, SimulatorConfig
+except ImportError:
+    from simulator_manager import SimulatorManager, SimulatorConfig
+
+try:
+    from ui.components.controls import (
+        render_control_panel,
+        render_simulation_controls,
+        render_motor_actions,
+        render_export_controls
+    )
+    from ui.components.charts import (
+        plot_sensor_grid,
+        plot_health_bars,
+        plot_health_vs_sensor,
+        plot_correlation_heatmap,
+        plot_realtime_dashboard
+    )
+    from ui.components.advanced_charts import (
+        plot_health_with_bursts,
+        plot_sensor_response_lag,
+        plot_operating_regimes,
+        plot_maintenance_events,
+        plot_sensor_quality_indicators
+    )
+    from ui.components.metrics import (
+        render_kpi_metrics,
+        render_alert_panel,
+        render_motor_table,
+        render_simulation_info,
+        render_fleet_overview
+    )
+except ImportError:
+    from components.controls import (
+        render_control_panel,
+        render_simulation_controls,
+        render_motor_actions,
+        render_export_controls
+    )
+    from components.charts import (
+        plot_sensor_grid,
+        plot_health_bars,
+        plot_health_vs_sensor,
+        plot_correlation_heatmap,
+        plot_realtime_dashboard
+    )
+    from components.advanced_charts import (
+        plot_health_with_bursts,
+        plot_sensor_response_lag,
+        plot_operating_regimes,
+        plot_maintenance_events,
+        plot_sensor_quality_indicators
+    )
+    from components.metrics import (
+        render_kpi_metrics,
+        render_alert_panel,
+        render_motor_table,
+        render_simulation_info,
+        render_fleet_overview
+    )
 
 
 # Page configuration
@@ -427,5 +463,10 @@ def render_footer():
 
 
 if __name__ == "__main__":
-    main()
-    render_footer()
+    try:
+        main()
+        render_footer()
+    except Exception as e:
+        st.error(f"❌ Application Error: {str(e)}")
+        st.exception(e)
+        st.info("Please check the logs or refresh the page.")
