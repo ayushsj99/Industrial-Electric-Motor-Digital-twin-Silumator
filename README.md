@@ -13,7 +13,7 @@ tags:
 - digital-twin
 - simulation
 - machine-learning
-short_description: Physics-based digital twin for generating realistic motor sensor data
+short_description: Physics-based digital twin for motor sensor data
 ---
 
 # 🏭 Industrial Predictive Maintenance Simulator  
