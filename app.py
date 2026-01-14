@@ -21,17 +21,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Debug: Show what we're trying to import
-st.write("🔍 Debug Info:")
-st.write(f"Project root: {project_root}")
-st.write(f"UI path: {ui_path}")
-st.write(f"sys.path: {sys.path[:3]}")
-
-# Try to import
+# Import and run the app
 try:
-    st.write("Attempting to import from ui.app...")
     from ui.app import main as run_main_app, render_footer, initialize_session_state
-    st.write("✅ Import successful!")
     
     # Run the application
     initialize_session_state()
@@ -39,12 +31,7 @@ try:
     render_footer()
     
 except Exception as e:
-    st.error(f"❌ Error: {str(e)}")
+    st.error(f"❌ Application Error: {str(e)}")
     st.exception(e)
-    
-    # Try to show directory structure
-    st.write("📂 Directory contents:")
-    st.write(f"Root files: {os.listdir(project_root)[:10]}")
-    if os.path.exists(ui_path):
-        st.write(f"UI files: {os.listdir(ui_path)}")
+    st.info("Please refresh the page or check the logs.")
 
