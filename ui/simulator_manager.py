@@ -27,6 +27,7 @@ class SimulatorConfig:
     auto_maintenance_enabled: bool = True  # Enable automatic maintenance at critical
     maintenance_cycle_period: int = 3600  # Hours between scheduled maintenance checks
     generation_mode: str = "live"  # "live" or "instantaneous"
+    target_maintenance_cycles: int = 1  # Number of maintenance cycles to generate per motor
 
 
 
@@ -115,15 +116,15 @@ class SimulatorManager:
             return pd.DataFrame()
         return pd.DataFrame(self.history)
     
-    def generate_until_all_critical(self, max_steps: int = 50000) -> pd.DataFrame:
+    def generate_until_all_critical(self, max_steps: int = 100000) -> pd.DataFrame:
         """
-        Instantaneous generation: Generate data until ALL motors reach critical stage.
-        Motors that reach critical first will auto-reset and continue until the last motor reaches critical.
+        Instantaneous generation: Generate data until ALL motors complete the specified number of maintenance cycles.
+        A maintenance cycle is counted when a motor reaches critical and gets automatic maintenance.
         
         Parameters
         ----------
         max_steps : int
-            Maximum steps to prevent infinite loops
+            Maximum steps to prevent infinite loops (default increased for multiple cycles)
             
         Returns
         -------
@@ -134,33 +135,56 @@ class SimulatorManager:
             raise ValueError("Factory not initialized. Call initialize() first.")
         
         new_records = []
-        motors_reached_critical = set()
+        # Track maintenance cycles per motor: {motor_id: cycle_count}
+        motor_maintenance_cycles = {motor.motor_id: 0 for motor in self.factory.motors}
         total_motors = self.config.num_motors
+        target_cycles = self.config.target_maintenance_cycles
         steps_taken = 0
         
-        while len(motors_reached_critical) < total_motors and steps_taken < max_steps:
+        # Track which motors were critical in previous step to detect entry into critical
+        previous_critical_motors = set()
+        
+        print(f"Starting data generation: {total_motors} motors, {target_cycles} cycle(s) each")
+        
+        # Continue until all motors complete target number of cycles
+        while steps_taken < max_steps:
             # Step simulation
             step_records = self.factory.step()
             
-            # Add timestamp to each record
+            current_critical_motors = set()
+            
+            # Add timestamp to each record and check for critical state transitions
             for record in step_records:
                 record["time"] = self.current_time
-                
-                # Check if this motor reached critical for the first time
                 motor_id = record["motor_id"]
                 health_state = record.get("health_state", "Healthy")
+                maintenance_event = record.get("maintenance_event")
                 
-                if health_state == "Critical" and motor_id not in motors_reached_critical:
-                    motors_reached_critical.add(motor_id)
-                    print(f"Motor {motor_id} reached critical at step {self.current_time} ({len(motors_reached_critical)}/{total_motors})")
+                # Track current critical motors
+                if health_state == "Critical":
+                    current_critical_motors.add(motor_id)
+                
+                # Count maintenance events
+                if maintenance_event == "automatic_maintenance":
+                    motor_maintenance_cycles[motor_id] += 1
+                    completed = sum(1 for c in motor_maintenance_cycles.values() if c >= target_cycles)
+                    print(f"Motor {motor_id} completed cycle {motor_maintenance_cycles[motor_id]} at step {self.current_time} ({completed}/{total_motors} motors finished)")
             
             new_records.extend(step_records)
             self.current_time += 1
             steps_taken += 1
             
-            # Check for automatic maintenance (motors will auto-reset)
-            if self.config.auto_maintenance_enabled:
-                self._check_and_perform_auto_maintenance()
+            previous_critical_motors = current_critical_motors
+            
+            # Check if all motors have completed target cycles
+            if all(cycles >= target_cycles for cycles in motor_maintenance_cycles.values()):
+                print(f"\n✓ All motors completed {target_cycles} cycle(s)!")
+                break
+            
+            # Progress update every 5000 steps
+            if steps_taken % 5000 == 0:
+                completed = sum(1 for c in motor_maintenance_cycles.values() if c >= target_cycles)
+                print(f"Progress: {steps_taken} steps, {completed}/{total_motors} motors completed")
         
         # Add all records to history
         self.history.extend(new_records)
@@ -170,7 +194,10 @@ class SimulatorManager:
             excess = len(self.history) - self.config.max_history * self.config.num_motors
             self.history = self.history[excess:]
         
-        print(f"\n✓ Generation complete: {steps_taken} steps, all {total_motors} motors reached critical")
+        # Final summary
+        cycles_summary = ", ".join([f"M{mid}:{cycles}" for mid, cycles in sorted(motor_maintenance_cycles.items())])
+        print(f"\n✓ Generation complete: {steps_taken} steps, {len(new_records)} records")
+        print(f"  Maintenance cycles per motor: {cycles_summary}")
         
         return pd.DataFrame(new_records)
     

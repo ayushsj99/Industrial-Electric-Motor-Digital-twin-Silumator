@@ -108,21 +108,36 @@ def render_simulation_controls(manager: SimulatorManager):
     if is_instantaneous:
         # Instantaneous mode: Single button to generate all data
         st.sidebar.info("⚡ **Instantaneous Mode Active**")
-        st.sidebar.markdown("Click below to generate data until all motors reach critical:")
+        
+        # Maintenance cycles control
+        target_cycles = st.sidebar.number_input(
+            "🔄 Maintenance Cycles per Motor",
+            min_value=1,
+            max_value=10,
+            value=manager.config.target_maintenance_cycles,
+            step=1,
+            help="Number of complete maintenance cycles to generate for each motor. Each cycle includes degradation from healthy to critical and automatic maintenance reset."
+        )
+        
+        # Update config if changed
+        if target_cycles != manager.config.target_maintenance_cycles:
+            manager.config.target_maintenance_cycles = target_cycles
+        
+        st.sidebar.markdown(f"Generate data for **{target_cycles} cycle(s)** per motor:")
         
         if st.sidebar.button(
-            "⚡ Generate Until All Critical",
+            "⚡ Generate Data",
             use_container_width=True,
             type="primary",
-            help="Generate data until all motors have reached critical state at least once"
+            help=f"Generate data until all motors complete {target_cycles} maintenance cycle(s)"
         ):
-            with st.spinner("Generating data... This may take a moment..."):
+            with st.spinner(f"Generating data for {target_cycles} cycle(s)... This may take a moment..."):
                 manager.generate_until_all_critical()
-            st.success("✓ Data generation complete!")
+            st.success(f"✓ Data generation complete! All motors completed {target_cycles} cycle(s).")
             st.rerun()
         
         st.sidebar.markdown("---")
-        st.sidebar.caption("💡 Motors will auto-reset when reaching critical and continue until all motors have experienced failure.")
+        st.sidebar.caption(f"💡 Each motor will go through {target_cycles} complete degradation cycle(s), with automatic maintenance reset after reaching critical state.")
     
     else:
         # Live mode: Normal play/pause controls
