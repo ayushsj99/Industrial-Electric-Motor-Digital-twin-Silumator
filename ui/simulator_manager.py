@@ -139,7 +139,15 @@ class SimulatorManager:
         """Get full history as DataFrame"""
         if not self.history:
             return pd.DataFrame()
-        return pd.DataFrame(self.history)
+        
+        try:
+            return pd.DataFrame(self.history)
+        except (ValueError, KeyError) as e:
+            # Handle inconsistent data - create empty DataFrame with expected columns
+            return pd.DataFrame(columns=[
+                'time', 'motor_id', 'motor_health', 'vibration', 'temperature',
+                'current', 'voltage', 'rpm', 'load_factor', 'health_state'
+            ])
     
     def generate_until_all_critical(self, max_steps: int = 100000) -> pd.DataFrame:
         """
@@ -244,11 +252,17 @@ class SimulatorManager:
         
         df = self.get_history_df()
         
+        if df.empty:
+            return pd.DataFrame()
+        
         # Get latest reading for each motor
         latest = df.groupby("motor_id").last().reset_index()
         
         # Add alert status based on health state
-        latest["alert"] = latest["health_state"].isin(["Critical", "Warning"])
+        if "health_state" in latest.columns:
+            latest["alert"] = latest["health_state"].isin(["Critical", "Warning"])
+        else:
+            latest["alert"] = False
         
         # Calculate estimated hours to critical (if not already critical)
         if "target_hours_to_critical" in latest.columns:
