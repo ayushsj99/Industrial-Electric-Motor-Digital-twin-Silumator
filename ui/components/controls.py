@@ -44,9 +44,9 @@ def render_control_panel(manager: SimulatorManager) -> SimulatorConfig:
         "Degradation Speed",
         min_value=0.1,
         max_value=5.0,
-        value=manager.config.degradation_speed,
+        value=2.0,
         step=0.1,
-        help="Multiplier for how fast motors degrade (1.0 = normal)"
+        help="Multiplier for how fast motors degrade (1.0 = normal, higher = faster)"
     )
     
     noise_level = st.sidebar.slider(
@@ -202,8 +202,8 @@ def render_simulation_controls(manager: SimulatorManager):
     from simulator_manager import SimulatorState
     
     is_auto_running = False
-    step_interval = 10
-    refresh_rate = 0.5
+    step_interval = 50
+    refresh_rate = 5.0
     
     if not is_instantaneous:
         st.sidebar.markdown("**Auto-Run Settings:**")
@@ -212,16 +212,16 @@ def render_simulation_controls(manager: SimulatorManager):
             "Steps per update",
             min_value=1,
             max_value=200,
-            value=10,
+            value=50,
             help="How many timesteps to generate per update (higher = faster data generation)"
         )
         
         refresh_rate = st.sidebar.slider(
             "Refresh rate (seconds)",
             min_value=0.1,
-            max_value=5.0,
-            value=0.5,
-            step=0.1,
+            max_value=10.0,
+            value=5.0,
+            step=0.5,
             help="How often to update the display"
         )
         

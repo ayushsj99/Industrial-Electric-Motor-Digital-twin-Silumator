@@ -20,7 +20,7 @@ from simulator.config_realistic import REALISTIC_CONFIG
 class SimulatorConfig:
     """Configuration for the simulator"""
     num_motors: int = 5
-    degradation_speed: float = 1.0
+    degradation_speed: float = 2.0  # Faster degradation for demo purposes
     noise_level: float = 1.0
     load_factor: float = 1.0
     max_history: int = 2000  # Maximum timesteps to keep (5-min intervals, ~7 days)
