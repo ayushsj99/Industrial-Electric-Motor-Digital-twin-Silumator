@@ -51,6 +51,9 @@ class SimulatorManager:
         self.state: str = SimulatorState.STOPPED
         self.alert_threshold: float = 0.3  # Health threshold for alerts
         self.last_maintenance_time: Dict[int, int] = {}  # Track last maintenance per motor
+        self.paused_motors: Dict[int, Dict] = {}  # Motors waiting for user decision {motor_id: {reason, health, timestamp}}
+        self.failed_motors: Dict[int, Dict] = {}  # Motors that have failed {motor_id: {timestamp, last_state}}
+        self.pending_decisions: List[int] = []  # Motors waiting for user decision
         
     def initialize(self, config: SimulatorConfig):
         """Initialize or reinitialize the factory simulator"""
@@ -76,6 +79,9 @@ class SimulatorManager:
         self.history = []
         self.current_time = 0
         self.state = SimulatorState.PAUSED
+        self.paused_motors = {}
+        self.failed_motors = {}
+        self.pending_decisions = []
         
     def step(self, num_steps: int = 1) -> pd.DataFrame:
         """
@@ -89,15 +95,34 @@ class SimulatorManager:
         for _ in range(num_steps):
             step_records = self.factory.step()
             
-            # Add timestamp to each record
+            # Filter out paused and failed motors from data generation
+            active_records = []
             for record in step_records:
+                motor_id = record["motor_id"]
+                
+                # Skip if motor is failed
+                if motor_id in self.failed_motors:
+                    continue
+                
+                # Skip if motor is paused (waiting for user decision)
+                if motor_id in self.paused_motors:
+                    continue
+                
                 record["time"] = self.current_time
+                active_records.append(record)
+                
+                # Check for critical health in live mode
+                if self.config.generation_mode == "live":
+                    health = record.get("motor_health", 1.0)
+                    if health <= self.alert_threshold and motor_id not in self.pending_decisions:
+                        # Pause this motor and add to pending decisions
+                        self._pause_motor_for_decision(motor_id, health)
             
-            new_records.extend(step_records)
+            new_records.extend(active_records)
             self.current_time += 1
             
-            # Check for automatic maintenance cycles
-            if self.config.auto_maintenance_enabled:
+            # Check for automatic maintenance cycles (only in instantaneous mode)
+            if self.config.auto_maintenance_enabled and self.config.generation_mode == "instantaneous":
                 self._check_and_perform_auto_maintenance()
         
         # Add to history
@@ -322,3 +347,68 @@ class SimulatorManager:
         if self.factory is not None:
             self.initialize(self.config)
             self.state = SimulatorState.RUNNING
+    
+    def _pause_motor_for_decision(self, motor_id: int, health: float):
+        """Pause a motor and request user decision on failure vs maintenance"""
+        if motor_id not in self.paused_motors:
+            self.paused_motors[motor_id] = {
+                "health": health,
+                "timestamp": self.current_time,
+                "reason": "critical_health"
+            }
+            self.pending_decisions.append(motor_id)
+    
+    def handle_motor_failure(self, motor_id: int):
+        """Mark motor as failed - stops data generation until user re-adds it"""
+        if motor_id in self.paused_motors:
+            self.failed_motors[motor_id] = {
+                "failure_time": self.current_time,
+                "health_at_failure": self.paused_motors[motor_id]["health"]
+            }
+            del self.paused_motors[motor_id]
+            if motor_id in self.pending_decisions:
+                self.pending_decisions.remove(motor_id)
+    
+    def handle_motor_maintenance(self, motor_id: int):
+        """Perform maintenance on motor and resume data generation"""
+        if motor_id in self.paused_motors:
+            # Reset motor to healthy state
+            self.reset_motor(motor_id)
+            del self.paused_motors[motor_id]
+            if motor_id in self.pending_decisions:
+                self.pending_decisions.remove(motor_id)
+    
+    def restore_failed_motor(self, motor_id: int):
+        """Restore a failed motor back to operation with good health, synced to current time"""
+        if motor_id in self.failed_motors:
+            # Reset motor to healthy state
+            self.reset_motor(motor_id)
+            # Remove from failed motors
+            del self.failed_motors[motor_id]
+            # Motor will now sync with current time on next step
+    
+    def get_pending_decisions(self) -> List[Dict]:
+        """Get list of motors waiting for user decision"""
+        decisions = []
+        for motor_id in self.pending_decisions:
+            if motor_id in self.paused_motors:
+                motor_info = self.paused_motors[motor_id]
+                decisions.append({
+                    "motor_id": motor_id,
+                    "health": motor_info["health"],
+                    "paused_at_time": motor_info["timestamp"],
+                    "hours_paused": (self.current_time - motor_info["timestamp"]) * 5 / 60  # Convert 5-min intervals to hours
+                })
+        return decisions
+    
+    def get_failed_motors(self) -> List[Dict]:
+        """Get list of failed motors"""
+        failed = []
+        for motor_id, info in self.failed_motors.items():
+            failed.append({
+                "motor_id": motor_id,
+                "failure_time": info["failure_time"],
+                "health_at_failure": info["health_at_failure"],
+                "hours_since_failure": (self.current_time - info["failure_time"]) * 5 / 60
+            })
+        return failed

@@ -24,7 +24,8 @@ try:
         render_control_panel,
         render_simulation_controls,
         render_motor_actions,
-        render_export_controls
+        render_export_controls,
+        render_motor_decision_panel
     )
     from ui.components.charts import (
         plot_sensor_grid,
@@ -52,7 +53,8 @@ except ImportError:
         render_control_panel,
         render_simulation_controls,
         render_motor_actions,
-        render_export_controls
+        render_export_controls,
+        render_motor_decision_panel
     )
     from components.charts import (
         plot_sensor_grid,
@@ -206,6 +208,10 @@ def main():
     )
     
     st.markdown("---")
+    
+    # Motor Decision Panel (for live mode critical motors)
+    if manager.config.generation_mode == "live":
+        render_motor_decision_panel(manager)
     
     # Get data
     history_df = manager.get_history_df()

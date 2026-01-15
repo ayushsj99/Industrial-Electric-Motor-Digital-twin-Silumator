@@ -290,3 +290,67 @@ def render_export_controls(manager: SimulatorManager):
 
 # Import pandas for timestamp
 import pandas as pd
+
+
+def render_motor_decision_panel(manager: SimulatorManager):
+    """
+    Render panel for user to decide on motor failure vs maintenance
+    """
+    pending = manager.get_pending_decisions()
+    failed = manager.get_failed_motors()
+    
+    if not pending and not failed:
+        return
+    
+    st.markdown("---")
+    st.subheader("⚠️ Motor Decision Panel")
+    
+    # Pending Decisions
+    if pending:
+        st.warning(f"🚨 {len(pending)} motor(s) require your decision!")
+        
+        for decision in pending:
+            motor_id = decision["motor_id"]
+            health = decision["health"]
+            hours_paused = decision["hours_paused"]
+            
+            with st.expander(f"⚠️ Motor {motor_id} - Health: {health:.2%} - Paused for {hours_paused:.1f} hours", expanded=True):
+                st.error(f"Motor {motor_id} has reached critical health ({health:.2%})")
+                st.info("**Choose an action:**")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if st.button(f"💥 Mark as Failed", key=f"fail_{motor_id}", use_container_width=True):
+                        manager.handle_motor_failure(motor_id)
+                        st.success(f"Motor {motor_id} marked as failed. Data generation stopped.")
+                        st.rerun()
+                    st.caption("Stops data generation. Can restore later.")
+                
+                with col2:
+                    if st.button(f"🔧 Perform Maintenance", key=f"maintain_{motor_id}", use_container_width=True):
+                        manager.handle_motor_maintenance(motor_id)
+                        st.success(f"Motor {motor_id} maintained. Health restored!")
+                        st.rerun()
+                    st.caption("Restores health and resumes operation.")
+    
+    # Failed Motors
+    if failed:
+        st.markdown("---")
+        st.subheader("💀 Failed Motors")
+        st.info(f"{len(failed)} motor(s) have failed and are offline")
+        
+        for motor_info in failed:
+            motor_id = motor_info["motor_id"]
+            hours_since_failure = motor_info["hours_since_failure"]
+            health_at_failure = motor_info["health_at_failure"]
+            
+            with st.expander(f"💀 Motor {motor_id} - Failed {hours_since_failure:.1f} hours ago"):
+                st.write(f"**Health at failure:** {health_at_failure:.2%}")
+                st.write(f"**Offline duration:** {hours_since_failure:.1f} hours")
+                
+                if st.button(f"🔄 Restore Motor {motor_id}", key=f"restore_{motor_id}", use_container_width=True):
+                    manager.restore_failed_motor(motor_id)
+                    st.success(f"Motor {motor_id} restored with good health and synced to current time!")
+                    st.rerun()
+                st.caption("Restores motor to full health, synced with current simulation time.")
