@@ -20,7 +20,7 @@ from simulator.config_realistic import REALISTIC_CONFIG
 class SimulatorConfig:
     """Configuration for the simulator"""
     num_motors: int = 5
-    degradation_speed: float = 2.0  # Faster degradation for demo purposes
+    degradation_speed: float = 1.0  # Degradation speed multiplier
     noise_level: float = 1.0
     load_factor: float = 1.0
     max_history: int = 2000  # Maximum timesteps to keep (5-min intervals, ~7 days)
@@ -71,7 +71,15 @@ class SimulatorManager:
         # Apply load factor and degradation speed to all motors
         for motor in self.factory.motors:
             motor.state.load_factor *= config.load_factor
-            motor.config["base_decay"] *= config.degradation_speed
+            # In LIVE mode only: Scale stage durations inversely with degradation_speed to make motors degrade faster
+            # This allows the user to see degradation happening in reasonable time
+            # Instantaneous mode doesn't need this as it generates complete lifecycle data
+            if config.generation_mode == "live" and config.degradation_speed != 1.0:
+                speed_factor = 1.0 / config.degradation_speed
+                motor.state.stage_0_duration_hours *= speed_factor
+                motor.state.stage_1_duration_hours *= speed_factor
+                motor.state.stage_2_duration_hours *= speed_factor
+                motor.state.target_hours_to_critical *= speed_factor
         
         # Initialize maintenance tracking for all motors
         self.last_maintenance_time = {motor.motor_id: 0 for motor in self.factory.motors}
