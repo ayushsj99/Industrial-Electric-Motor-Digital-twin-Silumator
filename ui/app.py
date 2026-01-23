@@ -23,7 +23,6 @@ try:
     from ui.components.controls import (
         render_control_panel,
         render_simulation_controls,
-        render_motor_actions,
         render_export_controls,
         render_motor_decision_panel
     )
@@ -52,7 +51,6 @@ except ImportError:
     from components.controls import (
         render_control_panel,
         render_simulation_controls,
-        render_motor_actions,
         render_export_controls,
         render_motor_decision_panel
     )
@@ -145,23 +143,27 @@ def main():
         )
         
         if config_changed:
-            st.sidebar.warning("⚠️ Configuration changed")
-            if st.sidebar.button("🔄 Apply & Reinitialize", use_container_width=True):
-                with st.spinner("Reinitializing..."):
-                    manager.initialize(config)
-                    st.success("✅ Configuration applied!")
-                    time.sleep(0.5)
-                    st.rerun()
+            st.sidebar.info("🔧 Configuration updated")
+            with st.spinner("Applying configuration..."):
+                manager.update_configuration(config)
+                st.sidebar.success("✅ Applied without losing data!")
+                time.sleep(0.3)
+                st.rerun()
+            
+            # Optional full restart button
+            with st.sidebar.expander("🔄 Advanced Options"):
+                st.caption("Only use if experiencing issues")
+                if st.button("🔄 Full Restart", use_container_width=True):
+                    with st.spinner("Performing full restart..."):
+                        manager.initialize(config)
+                        st.success("✅ Full restart completed!")
+                        time.sleep(0.5)
+                        st.rerun()
         
         st.sidebar.markdown("---")
         
         # Simulation controls
         auto_run_result = render_simulation_controls(manager)
-        
-        st.sidebar.markdown("---")
-        
-        # Motor actions
-        render_motor_actions(manager)
         
         st.sidebar.markdown("---")
         

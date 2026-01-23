@@ -90,6 +90,108 @@ class SimulatorManager:
         self.paused_motors = {}
         self.failed_motors = {}
         self.pending_decisions = []
+    
+    def update_configuration(self, config: SimulatorConfig):
+        """Update configuration without reinitializing - preserves existing data"""
+        if self.factory is None:
+            # If not initialized yet, do full initialization
+            self.initialize(config)
+            return
+        
+        old_config = self.config
+        self.config = config
+        
+        # Handle motor count changes
+        if config.num_motors != old_config.num_motors:
+            if config.num_motors > old_config.num_motors:
+                # Add new motors
+                self._add_motors(config.num_motors - old_config.num_motors)
+            elif config.num_motors < old_config.num_motors:
+                # Remove excess motors
+                self._remove_motors(old_config.num_motors - config.num_motors)
+        
+        # Update noise configuration
+        if abs(config.noise_level - old_config.noise_level) > 0.01:
+            modified_config = REALISTIC_CONFIG.copy()
+            modified_config["noise_scale"] = config.noise_level
+            self.factory.base_config = modified_config
+        
+        # Update motor configurations for existing motors
+        for motor in self.factory.motors:
+            # Update load factor
+            if abs(config.load_factor - old_config.load_factor) > 0.01:
+                # Proportionally adjust load factor
+                load_ratio = config.load_factor / old_config.load_factor
+                motor.state.load_factor *= load_ratio
+            
+            # Update degradation speed (only in live mode)
+            if (config.generation_mode == "live" and 
+                abs(config.degradation_speed - old_config.degradation_speed) > 0.01):
+                # Recalculate stage durations based on new speed
+                if old_config.degradation_speed != 1.0:
+                    # Reverse previous speed adjustment
+                    old_speed_factor = 1.0 / old_config.degradation_speed
+                    motor.state.stage_0_duration_hours /= old_speed_factor
+                    motor.state.stage_1_duration_hours /= old_speed_factor
+                    motor.state.stage_2_duration_hours /= old_speed_factor
+                    motor.state.target_hours_to_critical /= old_speed_factor
+                
+                if config.degradation_speed != 1.0:
+                    # Apply new speed adjustment
+                    new_speed_factor = 1.0 / config.degradation_speed
+                    motor.state.stage_0_duration_hours *= new_speed_factor
+                    motor.state.stage_1_duration_hours *= new_speed_factor
+                    motor.state.stage_2_duration_hours *= new_speed_factor
+                    motor.state.target_hours_to_critical *= new_speed_factor
+    
+    def _add_motors(self, count: int):
+        """Add new motors to existing factory"""
+        current_count = len(self.factory.motors)
+        
+        # Create modified config with user parameters
+        modified_config = REALISTIC_CONFIG.copy()
+        modified_config["noise_scale"] = self.config.noise_level
+        
+        for i in range(count):
+            motor_id = current_count + i
+            motor = self.factory._create_motor(motor_id, modified_config)
+            
+            # Apply current load factor and degradation speed
+            motor.state.load_factor *= self.config.load_factor
+            if self.config.generation_mode == "live" and self.config.degradation_speed != 1.0:
+                speed_factor = 1.0 / self.config.degradation_speed
+                motor.state.stage_0_duration_hours *= speed_factor
+                motor.state.stage_1_duration_hours *= speed_factor
+                motor.state.stage_2_duration_hours *= speed_factor
+                motor.state.target_hours_to_critical *= speed_factor
+            
+            self.factory.motors.append(motor)
+            self.last_maintenance_time[motor.motor_id] = self.current_time
+    
+    def _remove_motors(self, count: int):
+        """Remove motors from existing factory"""
+        motors_to_remove = []
+        
+        # Remove from the end
+        for i in range(count):
+            if self.factory.motors:
+                motor_to_remove = self.factory.motors.pop()
+                motors_to_remove.append(motor_to_remove.motor_id)
+        
+        # Clean up tracking for removed motors
+        for motor_id in motors_to_remove:
+            if motor_id in self.last_maintenance_time:
+                del self.last_maintenance_time[motor_id]
+            if motor_id in self.paused_motors:
+                del self.paused_motors[motor_id]
+            if motor_id in self.failed_motors:
+                del self.failed_motors[motor_id]
+            if motor_id in self.pending_decisions:
+                self.pending_decisions.remove(motor_id)
+        
+        # Remove history records for removed motors
+        self.history = [record for record in self.history 
+                       if record.get("motor_id") not in motors_to_remove]
         
     def step(self, num_steps: int = 1) -> pd.DataFrame:
         """
