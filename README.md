@@ -1,3 +1,21 @@
+---
+title: Industrial Predictive Maintenance Simulator
+emoji: 🏭
+colorFrom: blue
+colorTo: red
+sdk: streamlit
+sdk_version: 1.52.2
+app_file: app.py
+pinned: false
+license: mit
+tags:
+- predictive-maintenance
+- digital-twin
+- simulation
+- machine-learning
+short_description: Physics-based digital twin for motor sensor data
+---
+
 # 🏭 Industrial Predictive Maintenance Simulator  
 *A Physics-Based Digital Twin for Realistic Motor Sensor Data*
 
