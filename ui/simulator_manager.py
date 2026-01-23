@@ -116,15 +116,17 @@ class SimulatorManager:
                 if motor_id in self.paused_motors:
                     continue
                 
-                record["time"] = self.current_time
-                active_records.append(record)
-                
-                # Check for critical health in live mode
+                # Check for critical health in live mode BEFORE adding to records
                 if self.config.generation_mode == "live":
                     health = record.get("motor_health", 1.0)
                     if health <= self.alert_threshold and motor_id not in self.pending_decisions:
                         # Pause this motor and add to pending decisions
                         self._pause_motor_for_decision(motor_id, health)
+                        # Skip this record since motor is now paused
+                        continue
+                
+                record["time"] = self.current_time
+                active_records.append(record)
             
             new_records.extend(active_records)
             self.current_time += 1
