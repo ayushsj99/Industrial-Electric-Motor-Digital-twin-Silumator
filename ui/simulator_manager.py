@@ -448,11 +448,15 @@ class SimulatorManager:
             for alert in alerts
         ]
     
-    def export_data(self, filepath: str):
-        """Export history to CSV"""
+    def export_data(self) -> str:
+        """Export history as CSV string for download"""
         df = self.get_history_df()
-        df.to_csv(filepath, index=False)
-        return filepath
+        return df.to_csv(index=False)
+    
+    def get_export_filename(self) -> str:
+        """Generate filename for export with timestamp"""
+        timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
+        return f"industrial_simulator_export_{timestamp}.csv"
     
     def pause(self):
         """Pause the simulation"""

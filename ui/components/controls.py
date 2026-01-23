@@ -274,16 +274,22 @@ def render_export_controls(manager: SimulatorManager):
         total_records = len(manager.history)
         st.sidebar.info(f"📊 {total_records} records in history")
         
-        if st.sidebar.button("💾 Export to CSV", use_container_width=True):
-            timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
-            filepath = f"data/simulated/export_{timestamp}.csv"
-            
-            # Ensure directory exists
-            import os
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            
-            manager.export_data(filepath)
-            st.sidebar.success(f"Exported to {filepath}")
+        # Get CSV data and filename
+        csv_data = manager.export_data()
+        filename = manager.get_export_filename()
+        
+        # Download button
+        st.sidebar.download_button(
+            label="💾 Download CSV",
+            data=csv_data,
+            file_name=filename,
+            mime="text/csv",
+            use_container_width=True,
+            help="Download simulation data to your computer"
+        )
+        
+        # Show file info
+        st.sidebar.caption(f"📁 Will download as: {filename}")
     else:
         st.sidebar.info("No data to export yet")
 
