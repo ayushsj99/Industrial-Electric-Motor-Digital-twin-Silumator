@@ -15,8 +15,6 @@ if project_root not in sys.path:
 try:
     from ui.simulator_manager import SimulatorManager, SimulatorConfig
 except ImportError:
-    from ui.simulator_manager import SimulatorManager, SimulatorConfig
-except ImportError:
     from simulator_manager import SimulatorManager, SimulatorConfig
 
 try:
@@ -47,6 +45,9 @@ try:
         render_simulation_info,
         render_fleet_overview
     )
+    from ui.components.verification_charts import (
+        render_data_verification_view
+    )
 except ImportError:
     from components.controls import (
         render_control_panel,
@@ -74,6 +75,9 @@ except ImportError:
         render_motor_table,
         render_simulation_info,
         render_fleet_overview
+    )
+    from components.verification_charts import (
+        render_data_verification_view
     )
 
 
@@ -134,12 +138,15 @@ def main():
         # Check if config changed
         config_changed = (
             config.num_motors != manager.config.num_motors or
-            abs(config.degradation_speed - manager.config.degradation_speed) > 0.01 or
+            abs(config.degradation_speed - getattr(manager.config, 'degradation_speed', 1.0)) > 0.01 or
             abs(config.noise_level - manager.config.noise_level) > 0.01 or
             abs(config.load_factor - manager.config.load_factor) > 0.01 or
             config.auto_maintenance_enabled != manager.config.auto_maintenance_enabled or
             config.maintenance_cycle_period != manager.config.maintenance_cycle_period or
-            config.generation_mode != manager.config.generation_mode
+            config.generation_mode != manager.config.generation_mode or
+            config.target_maintenance_cycles != getattr(manager.config, 'target_maintenance_cycles', 1) or
+            abs(config.warning_threshold - getattr(manager.config, 'warning_threshold', 0.4)) > 0.01 or
+            abs(config.critical_threshold - getattr(manager.config, 'critical_threshold', 0.2)) > 0.01
         )
         
         if config_changed:
@@ -204,7 +211,7 @@ def main():
     # View mode selector
     view_mode = st.radio(
         "View Mode:",
-        ["Dashboard", "Detailed Analysis", "Advanced Features", "Fleet Status", "Raw Data"],
+        ["Dashboard", "Detailed Analysis", "Advanced Features", "Fleet Status", "Raw Data", "Data Verification"],
         horizontal=True,
         key="view_mode_selector"
     )
@@ -235,6 +242,9 @@ def main():
     
     elif view_mode == "Raw Data":
         render_data_view(history_df, status_df)
+    
+    elif view_mode == "Data Verification":
+        render_data_verification_view(history_df, manager)
     
     # Auto-run logic (only if running state)
     if st.session_state.initialized and auto_run_result[0]:

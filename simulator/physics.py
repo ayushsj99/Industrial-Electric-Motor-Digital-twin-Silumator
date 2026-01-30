@@ -8,8 +8,8 @@ def determine_health_state(health_value, healthy_threshold=0.7, warning_threshol
     
     Args:
         health_value: Continuous health [0, 1]
-        healthy_threshold: Threshold above which motor is healthy
-        warning_threshold: Threshold below which motor is critical
+        healthy_threshold: Threshold above which motor is healthy (warning threshold)
+        warning_threshold: Threshold below which motor is critical (critical threshold)
     
     Returns:
         HealthState enum value

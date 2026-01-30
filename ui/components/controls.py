@@ -44,7 +44,7 @@ def render_control_panel(manager: SimulatorManager) -> SimulatorConfig:
         "Degradation Speed",
         min_value=0.1,
         max_value=5.0,
-        value=1.0,
+        value=getattr(manager.config, 'degradation_speed', 1.0),
         step=0.1,
         help="Multiplier for how fast motors degrade (only affects live mode, 1.0 = normal)"
     )
@@ -67,20 +67,47 @@ def render_control_panel(manager: SimulatorManager) -> SimulatorConfig:
         help="Operating load multiplier (higher = more stress)"
     )
     
-    # Alert Settings
-    st.sidebar.subheader("Alert Settings")
+    # Health Thresholds
+    st.sidebar.subheader("Health Thresholds")
     
-    alert_threshold = st.sidebar.slider(
-        "Health Alert Threshold",
+    warning_threshold = st.sidebar.slider(
+        "Warning Threshold",
         min_value=0.1,
         max_value=0.9,
-        value=manager.alert_threshold,
+        value=getattr(manager.config, 'warning_threshold', 0.4),
         step=0.05,
-        help="Trigger alert when health drops below this value"
+        help="Health level below which motor shows warning state"
     )
-    manager.alert_threshold = alert_threshold
     
-    # Create new config
+    critical_threshold = st.sidebar.slider(
+        "Critical Threshold",
+        min_value=0.1,
+        max_value=0.6,
+        value=getattr(manager.config, 'critical_threshold', 0.2),
+        step=0.05,
+        help="Health level below which motor requires maintenance"
+    )
+    
+    # Alert threshold only for live mode
+    if generation_mode == "live":
+        st.sidebar.subheader("Alert Settings")
+        alert_threshold = st.sidebar.slider(
+            "Health Alert Threshold",
+            min_value=0.1,
+            max_value=0.9,
+            value=manager.alert_threshold,
+            step=0.05,
+            help="Trigger alert when health drops below this value"
+        )
+        manager.alert_threshold = alert_threshold
+    else:
+        # For instantaneous mode, use warning threshold as alert threshold
+        manager.alert_threshold = warning_threshold
+    
+    # Get target maintenance cycles (preserve any updates from instantaneous controls)
+    default_target_cycles = getattr(manager.config, 'target_maintenance_cycles', 1)
+    
+    # Create new config with current values
     config = SimulatorConfig(
         num_motors=num_motors,
         degradation_speed=degradation_speed,
@@ -88,7 +115,10 @@ def render_control_panel(manager: SimulatorManager) -> SimulatorConfig:
         load_factor=load_factor,
         auto_maintenance_enabled=True,
         maintenance_cycle_period=500,
-        generation_mode=generation_mode
+        generation_mode=generation_mode,
+        target_maintenance_cycles=default_target_cycles,
+        warning_threshold=warning_threshold,
+        critical_threshold=critical_threshold
     )
     
     return config
@@ -109,21 +139,23 @@ def render_simulation_controls(manager: SimulatorManager):
         # Instantaneous mode: Single button to generate all data
         st.sidebar.info("⚡ **Instantaneous Mode Active**")
         
-        # Maintenance cycles control
+        # Maintenance cycles control with session state key for persistence
         target_cycles = st.sidebar.number_input(
             "🔄 Maintenance Cycles per Motor",
             min_value=1,
             max_value=10,
-            value=manager.config.target_maintenance_cycles,
+            value=getattr(manager.config, 'target_maintenance_cycles', 1),
             step=1,
+            key="target_cycles_input",
             help="Number of complete maintenance cycles to generate for each motor. Each cycle includes degradation from healthy to critical and automatic maintenance reset."
         )
         
-        # Update config if changed
-        if target_cycles != manager.config.target_maintenance_cycles:
+        # Update manager config immediately when changed
+        if target_cycles != getattr(manager.config, 'target_maintenance_cycles', 1):
             manager.config.target_maintenance_cycles = target_cycles
         
         st.sidebar.markdown(f"Generate data for **{target_cycles} cycle(s)** per motor:")
+        st.sidebar.caption(f"Current config: {getattr(manager.config, 'target_maintenance_cycles', 'NOT SET')} cycles")
         
         if st.sidebar.button(
             "⚡ Generate Data",
@@ -131,9 +163,33 @@ def render_simulation_controls(manager: SimulatorManager):
             type="primary",
             help=f"Generate data until all motors complete {target_cycles} maintenance cycle(s)"
         ):
+            # Ensure config is updated before generation
+            manager.config.target_maintenance_cycles = target_cycles
+            
+            # Debug info
+            st.sidebar.write(f"🔧 Config: {manager.config.num_motors} motors, {target_cycles} cycles")
+            
             with st.spinner(f"Generating data for {target_cycles} cycle(s)... This may take a moment..."):
-                manager.generate_until_all_critical()
+                try:
+                    result_df = manager.generate_until_all_critical()
+                    st.sidebar.success(f"✓ Generated {len(result_df)} records!")
+                except Exception as e:
+                    st.sidebar.error(f"❌ Generation failed: {str(e)}")
+                    st.sidebar.exception(e)
+                    return
+            
+            # Automatically switch to verification view after generation
+            st.session_state.view_mode_selector = "Data Verification"
+            
             st.success(f"✓ Data generation complete! All motors completed {target_cycles} cycle(s).")
+            st.info("📊 Switched to Data Verification view - Review your generated data before download!")
+            st.rerun()
+            
+            # Automatically switch to verification view after generation
+            st.session_state.view_mode_selector = "Data Verification"
+            
+            st.success(f"✓ Data generation complete! All motors completed {target_cycles} cycle(s).")
+            st.info("📊 Switched to Data Verification view - Review your generated data before download!")
             st.rerun()
         
         st.sidebar.markdown("---")
@@ -199,12 +255,6 @@ def render_simulation_controls(manager: SimulatorManager):
     # Auto-run mode (only for live mode)
     st.sidebar.markdown("---")
     
-    from simulator_manager import SimulatorState
-    
-    is_auto_running = False
-    step_interval = 50
-    refresh_rate = 5.0
-    
     if not is_instantaneous:
         st.sidebar.markdown("**Auto-Run Settings:**")
         
@@ -226,9 +276,11 @@ def render_simulation_controls(manager: SimulatorManager):
         )
         
         # Return whether auto-run is active
-        is_auto_running = manager.state == SimulatorState.RUNNING
+        is_auto_running = manager.state == "running"
+        return is_auto_running, step_interval, refresh_rate
     
-    return is_auto_running, step_interval, refresh_rate
+    # For instantaneous mode, return defaults
+    return False, 50, 5.0
 
 
 def render_motor_actions(manager: SimulatorManager):
@@ -274,6 +326,10 @@ def render_export_controls(manager: SimulatorManager):
         total_records = len(manager.history)
         st.sidebar.info(f"📊 {total_records} records in history")
         
+        # Check if in instantaneous mode with recent data generation
+        if manager.config.generation_mode == "instantaneous" and hasattr(manager, 'factory'):
+            st.sidebar.success("💡 **Tip:** Use 'Data Verification' view to review generated data quality before download!")
+        
         # Get CSV data and filename
         csv_data = manager.export_data()
         filename = manager.get_export_filename()
@@ -292,10 +348,6 @@ def render_export_controls(manager: SimulatorManager):
         st.sidebar.caption(f"📁 Will download as: {filename}")
     else:
         st.sidebar.info("No data to export yet")
-
-
-# Import pandas for timestamp
-import pandas as pd
 
 
 def render_motor_decision_panel(manager: SimulatorManager):

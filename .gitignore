@@ -94,7 +94,6 @@ notebooks/eda_results/
 *.zip
 .streamlit/
 streamlit_app.py
-
 # Jupyter Notebook
 .ipynb_checkpoints
 *.ipynb

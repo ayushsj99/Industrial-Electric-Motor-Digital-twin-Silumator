@@ -106,11 +106,11 @@ class Motor:
             self.config
         )
         
-        # Update categorical health state
+        # Update categorical health state using UI-configured thresholds
         self.state.health_state = phys.determine_health_state(
             self.state.motor_health,
-            healthy_threshold=self.config.get("healthy_threshold", 0.7),
-            warning_threshold=self.config.get("warning_threshold", 0.4)
+            healthy_threshold=self.config.get("warning_threshold", 0.4),  # Threshold between healthy and warning
+            warning_threshold=self.config.get("critical_threshold", 0.2)  # Threshold between warning and critical
         )
         
         # Add current health to history buffer
