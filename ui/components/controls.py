@@ -67,29 +67,31 @@ def render_control_panel(manager: SimulatorManager) -> SimulatorConfig:
         help="Operating load multiplier (higher = more stress)"
     )
     
-    # Health Thresholds
-    st.sidebar.subheader("Health Thresholds")
-    
-    warning_threshold = st.sidebar.slider(
-        "Warning Threshold",
-        min_value=0.1,
-        max_value=0.9,
-        value=getattr(manager.config, 'warning_threshold', 0.4),
-        step=0.05,
-        help="Health level below which motor shows warning state"
-    )
-    
-    critical_threshold = st.sidebar.slider(
-        "Critical Threshold",
-        min_value=0.1,
-        max_value=0.6,
-        value=getattr(manager.config, 'critical_threshold', 0.2),
-        step=0.05,
-        help="Health level below which motor requires maintenance"
-    )
-    
-    # Alert threshold only for live mode
-    if generation_mode == "live":
+    # Health Thresholds (only for instantaneous mode)
+    if generation_mode == "instantaneous":
+        st.sidebar.subheader("Health Thresholds")
+        
+        warning_threshold = st.sidebar.slider(
+            "Warning Threshold",
+            min_value=0.1,
+            max_value=0.9,
+            value=getattr(manager.config, 'warning_threshold', 0.4),
+            step=0.05,
+            help="Health level below which motor shows warning state"
+        )
+        
+        critical_threshold = st.sidebar.slider(
+            "Critical Threshold",
+            min_value=0.1,
+            max_value=0.6,
+            value=getattr(manager.config, 'critical_threshold', 0.2),
+            step=0.05,
+            help="Health level below which motor requires maintenance"
+        )
+        
+        manager.alert_threshold = warning_threshold
+    else:
+        # Live mode: Only alert threshold
         st.sidebar.subheader("Alert Settings")
         alert_threshold = st.sidebar.slider(
             "Health Alert Threshold",
@@ -100,9 +102,10 @@ def render_control_panel(manager: SimulatorManager) -> SimulatorConfig:
             help="Trigger alert when health drops below this value"
         )
         manager.alert_threshold = alert_threshold
-    else:
-        # For instantaneous mode, use warning threshold as alert threshold
-        manager.alert_threshold = warning_threshold
+        
+        # Set default values for live mode
+        warning_threshold = 0.4
+        critical_threshold = 0.2
     
     # Get target maintenance cycles (preserve any updates from instantaneous controls)
     default_target_cycles = getattr(manager.config, 'target_maintenance_cycles', 1)

@@ -11,13 +11,13 @@ from typing import Dict, List, Tuple
 import warnings
 
 # Add project root to path
-project_root = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ui_path = os.path.join(project_root, 'ui')
 for path in [project_root, ui_path]:
     if path not in sys.path:
         sys.path.append(path)
 
-from simulator_manager import SimulatorManager, SimulatorConfig
+from ui.simulator_manager import SimulatorManager, SimulatorConfig
 from simulator.state import HealthState, DegradationStage
 
 

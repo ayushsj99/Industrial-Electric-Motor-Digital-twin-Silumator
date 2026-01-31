@@ -15,6 +15,7 @@ for path in [project_root, strategies_path]:
         sys.path.append(path)
 
 from simulator.factory import FactorySimulator
+from simulator.state import HealthState, DegradationStage
 from strategies.live_mode_strategy import LiveModeStrategy
 from strategies.instantaneous_strategy import InstantaneousStrategy
 
@@ -178,19 +179,27 @@ class SimulatorManager:
                 if health_level <= 0.1:
                     severity = "Critical"
                     message = f"Motor {motor_id} health critically low ({health_level:.1%})"
+                    health_state = "Critical"
                 elif health_level <= 0.3:
                     severity = "Warning"
                     message = f"Motor {motor_id} health degraded ({health_level:.1%})"
+                    health_state = "Warning"
                 else:
                     severity = "Info"
                     message = f"Motor {motor_id} health below threshold ({health_level:.1%})"
+                    health_state = "Warning"
                 
                 alerts.append({
                     'motor_id': motor_id,
                     'severity': severity,
                     'message': message,
                     'timestamp': self.current_time,
-                    'value': health_level
+                    'value': health_level,
+                    'health': health_level,  # Add for metrics compatibility
+                    'health_state': health_state,  # Add health state
+                    'vibration': motor.get('vibration', 0.0),  # Add vibration
+                    'temperature': motor.get('temperature', 0.0),  # Add temperature
+                    'hours_since_maintenance': motor.get('hours_since_maintenance', 0.0)
                 })
             
             # Check for high temperature alerts
@@ -200,7 +209,12 @@ class SimulatorManager:
                     'severity': "Warning",
                     'message': f"Motor {motor_id} temperature high ({motor['temperature']:.1f}°C)",
                     'timestamp': self.current_time,
-                    'value': motor['temperature']
+                    'value': motor['temperature'],
+                    'health': motor.get('motor_health', 1.0),  # Add health
+                    'health_state': "Warning",  # Add health state
+                    'vibration': motor.get('vibration', 0.0),  # Add vibration
+                    'temperature': motor['temperature'],
+                    'hours_since_maintenance': motor.get('hours_since_maintenance', 0.0)
                 })
             
             # Check for high vibration alerts
@@ -210,7 +224,12 @@ class SimulatorManager:
                     'severity': "Warning", 
                     'message': f"Motor {motor_id} vibration excessive ({motor['vibration']:.2f})",
                     'timestamp': self.current_time,
-                    'value': motor['vibration']
+                    'value': motor['vibration'],
+                    'health': motor.get('motor_health', 1.0),  # Add health
+                    'health_state': "Warning",  # Add health state
+                    'vibration': motor['vibration'],
+                    'temperature': motor.get('temperature', 0.0),  # Add temperature
+                    'hours_since_maintenance': motor.get('hours_since_maintenance', 0.0)
                 })
         
         # Add pending decision alerts (for live mode)
@@ -220,7 +239,12 @@ class SimulatorManager:
                 'severity': "Action Required",
                 'message': f"Motor {decision['motor_id']} requires maintenance decision",
                 'timestamp': decision['paused_at_time'],
-                'value': decision['health']
+                'value': decision['health'],
+                'health': decision['health'],  # Add for metrics compatibility
+                'health_state': "Critical",  # Pending decisions are critical
+                'vibration': 0.0,  # Default values since motor is paused
+                'temperature': 0.0,
+                'hours_since_maintenance': decision.get('hours_paused', 0.0)
             })
         
         return alerts
@@ -311,3 +335,35 @@ class SimulatorManager:
                     "hours_paused": (self.current_time - motor_info["timestamp"]) * 5 / 60
                 })
         return decisions
+    
+    def get_failed_motors(self) -> List[Dict]:
+        """Get list of failed motors with failure information"""
+        failed_list = []
+        for motor_id, failure_info in self.failed_motors.items():
+            failed_list.append({
+                "motor_id": motor_id,
+                "hours_since_failure": (self.current_time - failure_info["failure_time"]) * 5 / 60,
+                "health_at_failure": failure_info["health_at_failure"]
+            })
+        return failed_list
+    
+    def restore_failed_motor(self, motor_id: int):
+        """Restore a failed motor to operational state"""
+        if motor_id in self.failed_motors:
+            # Remove from failed motors
+            del self.failed_motors[motor_id]
+            
+            # Reset motor to healthy state
+            if self.factory is not None:
+                for motor in self.factory.motors:
+                    if motor.motor_id == motor_id:
+                        # Restore to full health
+                        motor.state.motor_health = 0.95
+                        motor.state.health_state = HealthState.HEALTHY
+                        motor.state.degradation_stage = DegradationStage.STAGE_0_HEALTHY
+                        motor.state.hours_since_maintenance = 0.0
+                        
+                        # Reset wear parameters to good condition
+                        motor.state.misalignment = motor.config["base_misalignment"]
+                        motor.state.friction_coeff = motor.config["base_friction"]
+                        break
