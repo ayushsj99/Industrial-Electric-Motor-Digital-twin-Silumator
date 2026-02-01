@@ -235,13 +235,19 @@ class InstantaneousTestSuite:
                 'regime', 'maintenance_event'
             ]
             
+            # Check that time is sequential within each motor (global timeline approach)
+            time_sequential_per_motor = all(
+                group['time'].is_monotonic_increasing 
+                for motor_id, group in result_df.groupby('motor_id')
+            )
+            
             structure_checks = [
                 ("Has all required columns", all(col in result_df.columns for col in required_cols)),
                 ("No null motor_ids", result_df['motor_id'].notna().all()),
                 ("No null cycle_ids", result_df['cycle_id'].notna().all()),
                 ("No null times", result_df['time'].notna().all()),
                 ("No null health", result_df['motor_health'].notna().all()),
-                ("Time is sequential", result_df['time'].is_monotonic_increasing),
+                ("Time is sequential per motor", time_sequential_per_motor),
                 ("Health in valid range", (result_df['motor_health'] >= 0).all() and (result_df['motor_health'] <= 1).all()),
                 ("Motor IDs are integers", result_df['motor_id'].dtype in ['int64', 'int32']),
                 ("Cycle IDs are integers", result_df['cycle_id'].dtype in ['int64', 'int32'])

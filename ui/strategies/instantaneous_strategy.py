@@ -102,8 +102,9 @@ class InstantaneousStrategy(SimulationStrategy):
     
     def generate_until_all_critical(self, max_steps: int = 100000) -> pd.DataFrame:
         """
-        Generate data with proper motor/cycle structure.
+        Generate data with global timeline where all motors operate simultaneously.
         Each motor goes through specified number of complete maintenance cycles.
+        All motors start at time 0 and advance together through global factory time.
         """
         if self.manager.factory is None:
             raise ValueError("Factory not initialized. Call initialize() first.")
@@ -112,101 +113,138 @@ class InstantaneousStrategy(SimulationStrategy):
         total_motors = self.manager.config.num_motors
         target_cycles = self.manager.config.target_maintenance_cycles
         
-        print(f"Starting structured data generation: {total_motors} motors, {target_cycles} cycle(s) each")
+        print(f"Starting synchronized data generation: {total_motors} motors, {target_cycles} cycle(s) each")
+        print("All motors operate on shared global timeline")
         
-        # Proper multi-level loop structure: Motor -> Cycles -> Timesteps
+        # Reset global time to 0 for synchronized start
+        self.manager.current_time = 0
+        
+        # Track cycles completed per motor
+        motor_cycles_completed = {motor.motor_id: 0 for motor in self.manager.factory.motors}
+        motor_completed = {motor.motor_id: False for motor in self.manager.factory.motors}
+        
+        # Reset all motors to start fresh on global timeline
         for motor in self.manager.factory.motors:
-            motor_id = motor.motor_id
-            print(f"\nProcessing Motor {motor_id}:")
+            self._reset_health_only(motor)
+        
+        # Global time simulation - all motors advance together
+        global_timestep = 0
+        max_global_steps = max_steps  # Overall safety limit
+        
+        print(f"\nGlobal timeline simulation starting...")
+        
+        while (not all(motor_completed.values()) and global_timestep < max_global_steps):
+            timestep_records = []
             
-            for cycle_num in range(target_cycles):
-                print(f"  Cycle {cycle_num + 1}/{target_cycles}")
-                cycle_records = []
-                cycle_start_time = self.manager.current_time
+            # Advance ALL motors simultaneously for this timestep
+            for motor in self.manager.factory.motors:
+                motor_id = motor.motor_id
                 
-                # Reset health for new cycle (preserve motor identity)
-                self._reset_health_only(motor)
+                # Skip motors that have completed all their cycles
+                if motor_completed[motor_id]:
+                    continue
                 
-                # Generate complete lifecycle for this motor/cycle
-                steps_in_cycle = 0
-                max_cycle_steps = 50000  # Safety limit per cycle to prevent infinite loops
+                # Step this motor's simulation
+                sensors = motor.step()
                 
-                while (motor.state.health_state != HealthState.CRITICAL and 
-                       steps_in_cycle < max_cycle_steps):
+                # Check if motor reached critical state (end of cycle)
+                if motor.state.health_state == HealthState.CRITICAL:
+                    # Complete this cycle
+                    motor_cycles_completed[motor_id] += 1
+                    current_cycle = motor_cycles_completed[motor_id] - 1
                     
-                    # Step motor simulation
-                    sensors = motor.step()
-                    
-                    # Add metadata
+                    # Add critical state record
                     sensors.update({
                         'motor_id': motor_id,
-                        'cycle_id': cycle_num,
+                        'cycle_id': current_cycle,
                         'time': self.manager.current_time,
                         'regime': getattr(self.manager.factory, 'current_regime', 'normal'),
-                        'maintenance_event': None  # No maintenance during normal operation
+                        'maintenance_event': None
                     })
+                    timestep_records.append(sensors)
                     
-                    cycle_records.append(sensors)
-                    self.manager.current_time += 1
-                    steps_in_cycle += 1
-                
-                # Trigger maintenance at end of cycle
-                if motor.state.health_state == HealthState.CRITICAL:
-                    # Perform maintenance
+                    # Perform maintenance and add maintenance record
                     self.manager.factory._perform_automatic_maintenance(motor)
                     
-                    # Add maintenance event record
+                    # Generate post-maintenance sensor reading
                     maintenance_sensors = motor.step()
                     maintenance_sensors.update({
                         'motor_id': motor_id,
-                        'cycle_id': cycle_num,
-                        'time': self.manager.current_time,
+                        'cycle_id': current_cycle,
+                        'time': self.manager.current_time + 0.5,  # Half-step for maintenance
                         'regime': getattr(self.manager.factory, 'current_regime', 'normal'),
                         'maintenance_event': 'automatic_maintenance'
                     })
-                    cycle_records.append(maintenance_sensors)
-                    self.manager.current_time += 1
+                    timestep_records.append(maintenance_sensors)
                     
-                    print(f"    Completed cycle {cycle_num + 1}: {len(cycle_records)} timesteps")
+                    # Check if motor completed all required cycles
+                    if motor_cycles_completed[motor_id] >= target_cycles:
+                        motor_completed[motor_id] = True
+                        print(f"  Motor {motor_id}: Completed all {target_cycles} cycles at time {self.manager.current_time}")
+                    else:
+                        # Reset for next cycle
+                        self._reset_health_only(motor)
+                        print(f"  Motor {motor_id}: Completed cycle {motor_cycles_completed[motor_id]}/{target_cycles}")
                 else:
-                    # Force critical state if motor didn't reach it naturally
-                    print(f"    Warning: Motor {motor_id} cycle {cycle_num + 1} hit step limit ({steps_in_cycle} steps)")
-                    print(f"    Current health: {motor.state.motor_health:.3f}, state: {motor.state.health_state}")
-                    print(f"    Forcing critical state and maintenance...")
-                    
-                    # Force critical state
-                    motor.state.health_state = HealthState.CRITICAL
-                    motor.state.motor_health = 0.1  # Force low health
-                    
-                    # Perform forced maintenance
-                    self.manager.factory._perform_automatic_maintenance(motor)
-                    
-                    # Add forced maintenance event
-                    forced_sensors = motor.step()
-                    forced_sensors.update({
+                    # Normal operation record
+                    current_cycle = motor_cycles_completed[motor_id]
+                    sensors.update({
                         'motor_id': motor_id,
-                        'cycle_id': cycle_num,
+                        'cycle_id': current_cycle,
                         'time': self.manager.current_time,
                         'regime': getattr(self.manager.factory, 'current_regime', 'normal'),
-                        'maintenance_event': 'forced_maintenance_timeout'
+                        'maintenance_event': None
                     })
-                    cycle_records.append(forced_sensors)
-                    self.manager.current_time += 1
-                    
-                    print(f"    Forced completion of cycle {cycle_num + 1}: {len(cycle_records)} timesteps")
+                    timestep_records.append(sensors)
+            
+            # Add all timestep records to history
+            all_records.extend(timestep_records)
+            
+            # Advance global time
+            self.manager.current_time += 1
+            global_timestep += 1
+            
+            # Progress reporting every 10000 steps
+            if global_timestep % 10000 == 0:
+                active_motors = sum(1 for completed in motor_completed.values() if not completed)
+                print(f"  Global time {self.manager.current_time}: {active_motors} motors still active")
+        
+        # Handle motors that didn't complete naturally
+        for motor_id, completed in motor_completed.items():
+            if not completed:
+                remaining_cycles = target_cycles - motor_cycles_completed[motor_id]
+                print(f"  Warning: Motor {motor_id} did not complete {remaining_cycles} cycles naturally")
                 
-                all_records.extend(cycle_records)
+                # Force completion for data consistency
+                motor = next(m for m in self.manager.factory.motors if m.motor_id == motor_id)
+                for cycle in range(remaining_cycles):
+                    # Force critical state and maintenance
+                    motor.state.health_state = HealthState.CRITICAL
+                    motor.state.motor_health = 0.1
+                    
+                    # Add forced completion records
+                    sensors = motor.step()
+                    current_cycle = motor_cycles_completed[motor_id] + cycle
+                    sensors.update({
+                        'motor_id': motor_id,
+                        'cycle_id': current_cycle,
+                        'time': self.manager.current_time + cycle,
+                        'regime': 'forced',
+                        'maintenance_event': 'forced_completion'
+                    })
+                    all_records.append(sensors)
+                    
+                    # Perform maintenance
+                    self.manager.factory._perform_automatic_maintenance(motor)
         
-        print(f"\n✓ Structured generation complete: {len(all_records)} total records")
+        print(f"\n✓ Synchronized generation complete: {len(all_records)} total records")
         print(f"  {total_motors} motors × {target_cycles} cycles each")
+        print(f"  Global timeline: 0 to {self.manager.current_time} timesteps")
         
-        # Store generated data in manager history for verification and export
-        self.manager.history.extend(all_records)
-        
-        # For instantaneous mode, don't trim history during generation
-        # The complete dataset is needed for verification and export
-        print(f"✓ Data stored in history: {len(self.manager.history)} total records")
-        print(f"📊 Dataset ready for verification and export!")
+        # Store complete dataset in manager history
+        self.manager.history = all_records
+        print(f"✓ Data stored in history: {len(all_records)} total records")
+        print("📊 Dataset ready for verification and export!")
         
         return pd.DataFrame(all_records)
     
