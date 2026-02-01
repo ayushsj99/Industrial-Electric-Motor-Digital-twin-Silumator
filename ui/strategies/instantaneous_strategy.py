@@ -5,6 +5,9 @@ import pandas as pd
 import numpy as np
 import sys
 import os
+import gc
+import psutil
+from typing import List, Dict, Optional
 
 # Add project root to path for imports
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -47,6 +50,74 @@ class InstantaneousStrategy(SimulationStrategy):
                 motor.state.target_hours_to_critical *= speed_factor
         
         return factory
+    
+    def _get_memory_usage_mb(self) -> float:
+        """Get current memory usage in MB"""
+        try:
+            process = psutil.Process()
+            return process.memory_info().rss / 1024 / 1024
+        except:
+            return 0.0
+    
+    def _estimate_record_size(self, record: Dict) -> int:
+        """Estimate memory size of a record in bytes"""
+        # Rough estimate: ~500 bytes per record (12 fields × ~40 bytes each)
+        return 500
+    
+    def _check_memory_limits(self, current_records: int, estimated_total: int) -> bool:
+        """Check if we're approaching memory limits"""
+        current_mb = self._get_memory_usage_mb()
+        
+        # Conservative limits for Hugging Face Spaces (assume 14GB limit with 2GB buffer)
+        max_memory_mb = 12000  # 12GB limit
+        max_records = 2000000   # ~2M records max
+        
+        memory_ok = current_mb < max_memory_mb
+        records_ok = current_records < max_records
+        
+        if not memory_ok:
+            print(f"⚠️ Memory usage high: {current_mb:.1f}MB / {max_memory_mb}MB")
+        if not records_ok:
+            print(f"⚠️ Record count high: {current_records} / {max_records}")
+            
+        return memory_ok and records_ok
+    
+    def _process_batch(self, batch_records: List[Dict], batch_size: int = 50000) -> None:
+        """Process a batch of records and manage memory"""
+        if len(batch_records) >= batch_size:
+            # Add to manager history in chunks
+            self.manager.history.extend(batch_records)
+            
+            # Force garbage collection to free memory
+            gc.collect()
+            
+            # Clear the batch
+            batch_records.clear()
+            
+            print(f"  📦 Processed batch: {len(self.manager.history)} total records, {self._get_memory_usage_mb():.1f}MB")
+    
+    def _estimate_record_size(self, record: Dict) -> int:
+        """Estimate memory size of a record in bytes"""
+        # Rough estimate: ~500 bytes per record (12 fields × ~40 bytes each)
+        return 500
+    
+    def _check_memory_limits(self, current_records: int, estimated_total: int) -> bool:
+        """Check if we're approaching memory limits"""
+        current_mb = self._get_memory_usage_mb()
+        
+        # Conservative limits for Hugging Face Spaces (assume 14GB limit with 2GB buffer)
+        max_memory_mb = 12000  # 12GB limit
+        max_records = 2000000   # ~2M records max
+        
+        memory_ok = current_mb < max_memory_mb
+        records_ok = current_records < max_records
+        
+        if not memory_ok:
+            print(f"⚠️ Memory usage high: {current_mb:.1f}MB / {max_memory_mb}MB")
+        if not records_ok:
+            print(f"⚠️ Record count high: {current_records} / {max_records}")
+            
+        return memory_ok and records_ok
     
     def step(self, num_steps: int = 1) -> pd.DataFrame:
         """Instantaneous mode step - no pausing, all motors run continuously"""
@@ -102,22 +173,34 @@ class InstantaneousStrategy(SimulationStrategy):
     
     def generate_until_all_critical(self, max_steps: int = 100000) -> pd.DataFrame:
         """
-        Generate data with global timeline where all motors operate simultaneously.
-        Each motor goes through specified number of complete maintenance cycles.
-        All motors start at time 0 and advance together through global factory time.
+        Memory-efficient data generation with global timeline synchronization.
+        Uses batching and memory monitoring to prevent crashes on large datasets.
         """
         if self.manager.factory is None:
             raise ValueError("Factory not initialized. Call initialize() first.")
         
-        all_records = []
         total_motors = self.manager.config.num_motors
         target_cycles = self.manager.config.target_maintenance_cycles
         
+        # Estimate dataset size and check feasibility
+        estimated_records_per_cycle = 15000  # Conservative estimate
+        estimated_total_records = total_motors * target_cycles * estimated_records_per_cycle
+        
         print(f"Starting synchronized data generation: {total_motors} motors, {target_cycles} cycle(s) each")
+        print(f"Estimated dataset size: ~{estimated_total_records:,} records")
+        
+        # Memory-safe limits check
+        if estimated_total_records > 3000000:  # 3M records limit
+            print(f"⚠️ WARNING: Large dataset detected ({estimated_total_records:,} records)")
+            print(f"⚠️ This may cause memory issues on Hugging Face Spaces.")
+            print(f"💡 Consider reducing motors ({total_motors}) or cycles ({target_cycles}) for stability.")
+            print(f"📊 Proceeding with memory-efficient generation...\n")
+        
         print("All motors operate on shared global timeline")
         
         # Reset global time to 0 for synchronized start
         self.manager.current_time = 0
+        self.manager.history = []  # Clear existing history
         
         # Track cycles completed per motor
         motor_cycles_completed = {motor.motor_id: 0 for motor in self.manager.factory.motors}
@@ -127,14 +210,23 @@ class InstantaneousStrategy(SimulationStrategy):
         for motor in self.manager.factory.motors:
             self._reset_health_only(motor)
         
-        # Global time simulation - all motors advance together
+        # Batch processing for memory efficiency
+        batch_records = []
+        batch_size = 25000  # Process in 25K record batches
         global_timestep = 0
-        max_global_steps = max_steps  # Overall safety limit
         
-        print(f"\nGlobal timeline simulation starting...")
+        print("\nGlobal timeline simulation starting...")
         
-        while (not all(motor_completed.values()) and global_timestep < max_global_steps):
+        # Main simulation loop with memory management
+        while (not all(motor_completed.values()) and global_timestep < max_steps):
             timestep_records = []
+            
+            # Memory check every 5000 steps
+            if global_timestep % 5000 == 0 and global_timestep > 0:
+                if not self._check_memory_limits(len(self.manager.history), estimated_total_records):
+                    print(f"\n⚠️ Memory limits reached at step {global_timestep}")
+                    print(f"📊 Stopping generation with {len(self.manager.history)} records")
+                    break
             
             # Advance ALL motors simultaneously for this timestep
             for motor in self.manager.factory.motors:
@@ -197,8 +289,11 @@ class InstantaneousStrategy(SimulationStrategy):
                     })
                     timestep_records.append(sensors)
             
-            # Add all timestep records to history
-            all_records.extend(timestep_records)
+            # Add timestep records to batch
+            batch_records.extend(timestep_records)
+            
+            # Process batch if it's large enough
+            self._process_batch(batch_records, batch_size)
             
             # Advance global time
             self.manager.current_time += 1
@@ -209,44 +304,34 @@ class InstantaneousStrategy(SimulationStrategy):
                 active_motors = sum(1 for completed in motor_completed.values() if not completed)
                 print(f"  Global time {self.manager.current_time}: {active_motors} motors still active")
         
-        # Handle motors that didn't complete naturally
-        for motor_id, completed in motor_completed.items():
-            if not completed:
-                remaining_cycles = target_cycles - motor_cycles_completed[motor_id]
-                print(f"  Warning: Motor {motor_id} did not complete {remaining_cycles} cycles naturally")
-                
-                # Force completion for data consistency
-                motor = next(m for m in self.manager.factory.motors if m.motor_id == motor_id)
-                for cycle in range(remaining_cycles):
-                    # Force critical state and maintenance
-                    motor.state.health_state = HealthState.CRITICAL
-                    motor.state.motor_health = 0.1
-                    
-                    # Add forced completion records
-                    sensors = motor.step()
-                    current_cycle = motor_cycles_completed[motor_id] + cycle
-                    sensors.update({
-                        'motor_id': motor_id,
-                        'cycle_id': current_cycle,
-                        'time': self.manager.current_time + cycle,
-                        'regime': 'forced',
-                        'maintenance_event': 'forced_completion'
-                    })
-                    all_records.append(sensors)
-                    
-                    # Perform maintenance
-                    self.manager.factory._perform_automatic_maintenance(motor)
+        # Process any remaining batch records
+        if batch_records:
+            self.manager.history.extend(batch_records)
+            batch_records.clear()
         
-        print(f"\n✓ Synchronized generation complete: {len(all_records)} total records")
+        # Handle motors that didn't complete naturally (simplified for memory efficiency)
+        incomplete_motors = [motor_id for motor_id, completed in motor_completed.items() if not completed]
+        if incomplete_motors:
+            print(f"  Note: {len(incomplete_motors)} motors didn't complete all cycles within time limit")
+        
+        # Final cleanup
+        gc.collect()
+        
+        total_records = len(self.manager.history)
+        final_memory = self._get_memory_usage_mb()
+        
+        print(f"\n✓ Synchronized generation complete: {total_records:,} total records")
         print(f"  {total_motors} motors × {target_cycles} cycles each")
         print(f"  Global timeline: 0 to {self.manager.current_time} timesteps")
-        
-        # Store complete dataset in manager history
-        self.manager.history = all_records
-        print(f"✓ Data stored in history: {len(all_records)} total records")
+        print(f"  Memory usage: {final_memory:.1f}MB")
+        print(f"✓ Data stored in history: {total_records:,} total records")
         print("📊 Dataset ready for verification and export!")
         
-        return pd.DataFrame(all_records)
+        # Return DataFrame for immediate use (more memory efficient than storing twice)
+        if total_records > 1000000:  # 1M+ records
+            print(f"💡 Large dataset - consider downloading in chunks if needed")
+            
+        return pd.DataFrame(self.manager.history)
     
     def _reset_health_only(self, motor):
         """

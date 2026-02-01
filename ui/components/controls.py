@@ -157,6 +157,16 @@ def render_simulation_controls(manager: SimulatorManager):
         if target_cycles != getattr(manager.config, 'target_maintenance_cycles', 1):
             manager.config.target_maintenance_cycles = target_cycles
         
+        # Memory warning for large configurations
+        estimated_records = manager.config.num_motors * target_cycles * 15000  # Rough estimate
+        if estimated_records > 3000000:  # 3M records
+            st.sidebar.error(f"⚠️ **Large Dataset Warning**")
+            st.sidebar.caption(f"Config: {manager.config.num_motors} motors × {target_cycles} cycles ≈ {estimated_records:,} records")
+            st.sidebar.caption("This may cause memory issues on Hugging Face. Consider reducing motors or cycles.")
+        elif estimated_records > 1000000:  # 1M records
+            st.sidebar.warning(f"⚠️ **Medium Dataset**")
+            st.sidebar.caption(f"≈ {estimated_records:,} records - Generation may take longer")
+        
         st.sidebar.markdown(f"Generate data for **{target_cycles} cycle(s)** per motor:")
         st.sidebar.caption(f"Current config: {getattr(manager.config, 'target_maintenance_cycles', 'NOT SET')} cycles")
         
