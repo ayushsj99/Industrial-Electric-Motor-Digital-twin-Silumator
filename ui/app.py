@@ -124,6 +124,9 @@ def main():
     # Configuration controls
     config = render_control_panel(manager)
     
+    # Initialize auto_run_result with default values
+    auto_run_result = (False, 1, 0.5)  # (enabled, step_interval, refresh_rate)
+    
     # Initialize/Reinitialize button
     if not st.session_state.initialized:
         st.sidebar.markdown("---")
