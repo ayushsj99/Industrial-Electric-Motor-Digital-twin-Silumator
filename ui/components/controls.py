@@ -162,7 +162,7 @@ def render_simulation_controls(manager: SimulatorManager):
         
         if st.sidebar.button(
             "⚡ Generate Data",
-            use_container_width=True,
+            width='stretch',
             type="primary",
             help=f"Generate data until all motors complete {target_cycles} maintenance cycle(s)"
         ):
@@ -207,21 +207,21 @@ def render_simulation_controls(manager: SimulatorManager):
         
         with col1:
             if manager.state == SimulatorState.RUNNING:
-                if st.button("⏸️ Pause", use_container_width=True, help="Pause simulation"):
+                if st.button("⏸️ Pause", width='stretch', help="Pause simulation"):
                     manager.pause()
                     st.rerun()
             else:
-                if st.button("▶️ Play", use_container_width=True, help="Start/Resume simulation"):
+                if st.button("▶️ Play", width='stretch', help="Start/Resume simulation"):
                     manager.resume()
                     st.rerun()
         
         with col2:
-            if st.button("⏹️ Stop", use_container_width=True, help="Stop simulation"):
+            if st.button("⏹️ Stop", width='stretch', help="Stop simulation"):
                 manager.stop()
                 st.rerun()
         
         with col3:
-            if st.button("🔄 Restart", use_container_width=True, help="Restart from beginning"):
+            if st.button("🔄 Restart", width='stretch', help="Restart from beginning"):
                 manager.restart()
                 st.rerun()
         
@@ -230,12 +230,12 @@ def render_simulation_controls(manager: SimulatorManager):
         col1, col2 = st.sidebar.columns(2)
         
         with col1:
-            if st.button("➡️ +1", use_container_width=True, help="Advance by 1 timestep"):
+            if st.button("➡️ +1", width='stretch', help="Advance by 1 timestep"):
                 manager.step(num_steps=1)
                 st.rerun()
         
         with col2:
-            if st.button("⏩ +10", use_container_width=True, help="Advance by 10 timesteps"):
+            if st.button("⏩ +10", width='stretch', help="Advance by 10 timesteps"):
                 manager.step(num_steps=10)
                 st.rerun()
     
@@ -246,12 +246,12 @@ def render_simulation_controls(manager: SimulatorManager):
     col3, col4 = st.sidebar.columns(2)
     
     with col3:
-        if st.button("⏭️ +50", use_container_width=True, help="Advance by 50 timesteps"):
+        if st.button("⏭️ +50", width='stretch', help="Advance by 50 timesteps"):
             manager.step(num_steps=50)
             st.rerun()
     
     with col4:
-        if st.button("⏭️⏭️ +100", use_container_width=True, help="Advance by 100 timesteps"):
+        if st.button("⏭️⏭️ +100", width='stretch', help="Advance by 100 timesteps"):
             manager.step(num_steps=100)
             st.rerun()
     
@@ -307,13 +307,13 @@ def render_motor_actions(manager: SimulatorManager):
     col1, col2 = st.sidebar.columns(2)
     
     with col1:
-        if st.button("💥 Inject Failure", use_container_width=True):
+        if st.button("💥 Inject Failure", width='stretch'):
             manager.inject_failure(selected_motor)
             st.success(f"Failure injected to Motor {selected_motor}")
             st.rerun()
     
     with col2:
-        if st.button("🔧 Maintenance", use_container_width=True):
+        if st.button("🔧 Maintenance", width='stretch'):
             manager.reset_motor(selected_motor)
             st.success(f"Motor {selected_motor} maintained")
             st.rerun()
@@ -343,7 +343,7 @@ def render_export_controls(manager: SimulatorManager):
             data=csv_data,
             file_name=filename,
             mime="text/csv",
-            use_container_width=True,
+            width='stretch',
             help="Download simulation data to your computer"
         )
         
@@ -382,14 +382,14 @@ def render_motor_decision_panel(manager: SimulatorManager):
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    if st.button(f"💥 Mark as Failed", key=f"fail_{motor_id}", use_container_width=True):
+                    if st.button(f"💥 Mark as Failed", key=f"fail_{motor_id}", width='stretch'):
                         manager.handle_motor_failure(motor_id)
                         st.success(f"Motor {motor_id} marked as failed. Data generation stopped.")
                         st.rerun()
                     st.caption("Stops data generation. Can restore later.")
                 
                 with col2:
-                    if st.button(f"🔧 Perform Maintenance", key=f"maintain_{motor_id}", use_container_width=True):
+                    if st.button(f"🔧 Perform Maintenance", key=f"maintain_{motor_id}", width='stretch'):
                         manager.handle_motor_maintenance(motor_id)
                         st.success(f"Motor {motor_id} maintained. Health restored!")
                         st.rerun()
@@ -410,7 +410,7 @@ def render_motor_decision_panel(manager: SimulatorManager):
                 st.write(f"**Health at failure:** {health_at_failure:.2%}")
                 st.write(f"**Offline duration:** {hours_since_failure:.1f} hours")
                 
-                if st.button(f"🔄 Restore Motor {motor_id}", key=f"restore_{motor_id}", use_container_width=True):
+                if st.button(f"🔄 Restore Motor {motor_id}", key=f"restore_{motor_id}", width='stretch'):
                     manager.restore_failed_motor(motor_id)
                     st.success(f"Motor {motor_id} restored with good health and synced to current time!")
                     st.rerun()

@@ -127,13 +127,12 @@ def main():
     # Initialize/Reinitialize button
     if not st.session_state.initialized:
         st.sidebar.markdown("---")
-        if st.sidebar.button("🚀 Initialize Simulator", type="primary", use_container_width=True):
+        if st.sidebar.button("🚀 Initialize Simulator", type="primary", width='stretch'):
             with st.spinner("Initializing factory simulator..."):
                 manager.initialize(config)
                 st.session_state.initialized = True
                 st.success("✅ Simulator initialized!")
-                time.sleep(0.5)
-                st.rerun()
+                # Removed time.sleep and st.rerun to reduce WebSocket pressure
     else:
         # Check if config changed
         config_changed = (
@@ -154,18 +153,16 @@ def main():
             with st.spinner("Applying configuration..."):
                 manager.update_configuration(config)
                 st.sidebar.success("✅ Applied without losing data!")
-                time.sleep(0.3)
-                st.rerun()
+                # Removed time.sleep and st.rerun to reduce WebSocket pressure
             
             # Optional full restart button
             with st.sidebar.expander("🔄 Advanced Options"):
                 st.caption("Only use if experiencing issues")
-                if st.button("🔄 Full Restart", use_container_width=True):
+                if st.button("🔄 Full Restart", width='stretch'):
                     with st.spinner("Performing full restart..."):
                         manager.initialize(config)
                         st.success("✅ Full restart completed!")
-                        time.sleep(0.5)
-                        st.rerun()
+                        # Removed time.sleep and st.rerun to reduce WebSocket pressure
         
         st.sidebar.markdown("---")
         
@@ -439,7 +436,7 @@ def render_data_view(history_df, status_df):
             st.write(f"**Time Range:** {history_df['time'].min()} to {history_df['time'].max()}")
             
             # Show data
-            st.dataframe(history_df, use_container_width=True, height=400)
+            st.dataframe(history_df, width='stretch', height=400)
             
             # Download button
             csv = history_df.to_csv(index=False)
@@ -456,7 +453,7 @@ def render_data_view(history_df, status_df):
         if status_df.empty:
             st.info("No status data available")
         else:
-            st.dataframe(status_df, use_container_width=True)
+            st.dataframe(status_df, width='stretch')
             
             # Download button
             csv = status_df.to_csv(index=False)

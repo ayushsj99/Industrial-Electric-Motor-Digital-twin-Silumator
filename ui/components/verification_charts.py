@@ -224,7 +224,7 @@ def render_motor_health_analysis(motor_df: pd.DataFrame, motor_id: int):
     fig.update_xaxes(title_text="Time Steps", row=2, col=2)
     fig.update_yaxes(title_text="Event Type", row=2, col=2)
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 def render_maintenance_cycle_analysis(motor_df: pd.DataFrame, motor_id: int):
@@ -257,7 +257,7 @@ def render_maintenance_cycle_analysis(motor_df: pd.DataFrame, motor_id: int):
             cycle_stats.append(stats)
         
         stats_df = pd.DataFrame(cycle_stats)
-        st.dataframe(stats_df, use_container_width=True)
+        st.dataframe(stats_df, width='stretch')
     
     with col2:
         st.markdown("**🎯 Cycle Quality Metrics**")
@@ -288,7 +288,7 @@ def render_maintenance_cycle_analysis(motor_df: pd.DataFrame, motor_id: int):
             quality_metrics.append(quality)
         
         quality_df = pd.DataFrame(quality_metrics)
-        st.dataframe(quality_df, use_container_width=True)
+        st.dataframe(quality_df, width='stretch')
     
     # Cycle overlay chart
     st.markdown("**📈 All Cycles Overlay**")
@@ -321,7 +321,7 @@ def render_maintenance_cycle_analysis(motor_df: pd.DataFrame, motor_id: int):
         height=400
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 def render_sensor_response_analysis(motor_df: pd.DataFrame, motor_id: int):
@@ -367,7 +367,7 @@ def render_sensor_response_analysis(motor_df: pd.DataFrame, motor_id: int):
         showlegend=False
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     
     # Sensor correlations
     st.markdown("**🔗 Sensor Correlation Analysis**")
@@ -382,7 +382,7 @@ def render_sensor_response_analysis(motor_df: pd.DataFrame, motor_id: int):
         title="Sensor and Health Correlations"
     )
     
-    st.plotly_chart(fig_corr, use_container_width=True)
+    st.plotly_chart(fig_corr, width='stretch')
 
 
 def render_fleet_comparison(history_df: pd.DataFrame):
@@ -422,7 +422,7 @@ def render_fleet_comparison(history_df: pd.DataFrame):
         height=500
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     
     # Fleet statistics summary
     st.markdown("**📋 Fleet Summary Statistics**")
@@ -444,7 +444,7 @@ def render_fleet_comparison(history_df: pd.DataFrame):
             fleet_stats.append(stats)
         
         fleet_df = pd.DataFrame(fleet_stats)
-        st.dataframe(fleet_df, use_container_width=True)
+        st.dataframe(fleet_df, width='stretch')
     
     with col2:
         # Data quality metrics
@@ -469,4 +469,4 @@ def render_fleet_comparison(history_df: pd.DataFrame):
             quality_stats.append(quality)
         
         quality_df = pd.DataFrame(quality_stats)
-        st.dataframe(quality_df, use_container_width=True)
+        st.dataframe(quality_df, width='stretch')

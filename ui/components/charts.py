@@ -62,7 +62,7 @@ def plot_time_series(df: pd.DataFrame, columns: List[str], title: str = "Time Se
         )
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 def plot_sensor_grid(df: pd.DataFrame):
@@ -135,7 +135,7 @@ def plot_sensor_grid(df: pd.DataFrame):
     fig.update_xaxes(title_text="Time", row=2, col=1)
     fig.update_xaxes(title_text="Time", row=2, col=2)
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 def plot_health_bars(status_df: pd.DataFrame):
@@ -193,7 +193,7 @@ def plot_health_bars(status_df: pd.DataFrame):
         annotation_position="top"
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 def plot_health_vs_sensor(df: pd.DataFrame, sensor: str = "vibration"):
@@ -245,7 +245,7 @@ def plot_health_vs_sensor(df: pd.DataFrame, sensor: str = "vibration"):
     # Invert x-axis (healthy to failed)
     fig.update_xaxes(autorange="reversed")
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 def plot_correlation_heatmap(df: pd.DataFrame):
@@ -287,7 +287,7 @@ def plot_correlation_heatmap(df: pd.DataFrame):
         xaxis=dict(side='bottom')
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 def plot_realtime_dashboard(df: pd.DataFrame):
@@ -358,4 +358,4 @@ def plot_realtime_dashboard(df: pd.DataFrame):
     fig.update_yaxes(title_text="Vibration", row=2, col=1)
     fig.update_xaxes(title_text="Time", row=2, col=1)
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')

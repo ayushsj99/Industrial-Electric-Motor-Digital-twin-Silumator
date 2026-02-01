@@ -74,7 +74,7 @@ def plot_health_with_bursts(df: pd.DataFrame):
         hovermode='x unified'
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 def plot_sensor_response_lag(df: pd.DataFrame):
@@ -146,7 +146,7 @@ def plot_sensor_response_lag(df: pd.DataFrame):
     fig.update_yaxes(title_text="Normalized Value", row=2, col=1)
     fig.update_xaxes(title_text="Time", row=2, col=1)
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 def plot_operating_regimes(df: pd.DataFrame):
@@ -224,7 +224,7 @@ def plot_operating_regimes(df: pd.DataFrame):
     fig.update_yaxes(title_text="Temp (°C)", row=3, col=1)
     fig.update_xaxes(title_text="Time", row=3, col=1)
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 def plot_maintenance_events(df: pd.DataFrame):
@@ -289,7 +289,7 @@ def plot_maintenance_events(df: pd.DataFrame):
         ]
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 def plot_sensor_quality_indicators(df: pd.DataFrame):
@@ -356,4 +356,4 @@ def plot_sensor_quality_indicators(df: pd.DataFrame):
         hovermode='closest'
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
